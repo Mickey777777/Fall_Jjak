@@ -20,6 +20,51 @@ npm run dev
 
 ---
 
+## Git 컨벤션
+
+### 브랜치 구조
+
+```
+main          ← 최종 병합 (PR 필수)
+  └── Feat/기능명     ← 개인 기능 브랜치
+  └── Fix/*           ← 버그 수정
+  └── Hotfix/*        ← 긴급 수정
+  └── Refactor/*      ← 리팩토링
+  └── Docs/*          ← 문서
+  └── Chore/*         ← 빌드/설정
+```
+
+브랜치 prefix는 **PascalCase** (앞글자 대문자) 로 통일.
+모든 작업 브랜치는 `main` 에서 분기하고, PR 을 통해 다시 `main` 으로 머지한다.
+
+### 브랜치 네이밍 예시
+
+| 작업 종류 | 브랜치 이름 예시 |
+|----------|------------------|
+| 새 기능 | `Feat/environment-art`, `Feat/game-assets`, `Feat/ui-ux` |
+| 버그 수정 | `Fix/jump-trajectory`, `Fix/restart-position` |
+| 긴급 수정 | `Hotfix/build-error` |
+| 리팩토링 | `Refactor/lily-pad-manager` |
+| 문서 | `Docs/readme-update` |
+| 빌드/설정 | `Chore/vite-config`, `Chore/gitignore` |
+
+### 커밋 메시지 컨벤션
+
+커밋은 `타입: 내용` 형식의 **소문자 prefix** 사용 (Conventional Commits 스타일).
+
+```
+feat: 새로운 기능 추가
+fix: 버그 수정
+hotfix: 긴급 수정
+docs: 문서 수정
+style: 코드 포맷팅 (기능 변경 없음)
+refactor: 코드 리팩토링
+test: 테스트 코드 추가
+chore: 빌드/설정 변경
+```
+
+---
+
 ## 게임 소개
 
 「폴 짝」은 한 마리의 개구리가 끝없이 펼쳐진 오염된 연못 위를 연잎에서 연잎으로 점프해 나아가는 캐주얼 아케이드 게임입니다. 플레이어는 마우스와 키보드를 활용한 정교한 컨트롤로 점프의 거리·높이·방향을 조절하며, 변화무쌍한 연잎과 날씨, 다양한 적과 장애물을 극복해 최고 점수에 도전합니다.
