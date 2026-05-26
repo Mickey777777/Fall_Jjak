@@ -42,10 +42,6 @@ export default function MainMenu() {
         </div>
         <div className="row hi">최고 점수: {highScore.toLocaleString()}</div>
       </div>
-
-      <div className="credits">
-        팀명 크누씨에스이이십오 · 캐주얼 아케이드 스코어 어택
-      </div>
     </div>
   );
 }
