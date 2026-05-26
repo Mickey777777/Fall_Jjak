@@ -103,7 +103,7 @@ export const ENEMY = {
   FISH_LUNGE_HEIGHT: 1.6, // 이보다 낮게 날면 잡힘
   BIRD_DIVE_HEIGHT: 2.6, // 이보다 높게 날면 잡힘
   CROC_BASE_DISTANCE: 9, // 개구리 뒤 N미터에서 시작
-  CROC_SPEED: 0.45, // m/s 추가 속도 (난이도 0 기준)
+  CROC_SPEED: 0.80, // m/s 추가 속도 (난이도 0 기준)
 };
 
 // ──────────────────────────────────────────────

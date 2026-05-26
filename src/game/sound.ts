@@ -84,3 +84,20 @@ export function playSpring() {
   blip(420, "square", 0.08, 0.16);
   setTimeout(() => blip(720, "square", 0.1, 0.16), 60);
 }
+
+export function playCrocSnap() {
+  // 악어 잡아먹는 소리 — 낮은 충격 + 찰칵
+  blip(65, "sawtooth", 0.22, 0.32);
+  setTimeout(() => blip(130, "square", 0.12, 0.22), 85);
+  setTimeout(() => blip(200, "square", 0.06, 0.14), 155);
+}
+
+let _lastCrocWarnAt = 0;
+export function playCrocWarnIfNeeded() {
+  const now = performance.now();
+  if (now - _lastCrocWarnAt < 3800) return;
+  _lastCrocWarnAt = now;
+  // 낮은 으르렁 소리
+  blip(55, "sawtooth", 0.42, 0.12);
+  setTimeout(() => blip(72, "sawtooth", 0.32, 0.08), 190);
+}
