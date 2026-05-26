@@ -48,11 +48,11 @@ export function judgmentText(t: JudgmentType): string {
 export function judgmentColor(t: JudgmentType): string {
   switch (t) {
     case "Yarr":
-      return "#ffd84d";
+      return "#F59E0B";
     case "Great":
-      return "#7df2a1";
+      return "#22C55E";
     case "NotBad":
-      return "#c9c9c9";
+      return "#9CA3AF";
     case "Miss":
       return "#ff6a6a";
   }
