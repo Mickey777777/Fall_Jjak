@@ -402,17 +402,25 @@ button.ghost {
   justify-content: center;
 }
 .actions {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
   gap: 14px;
   margin-top: 8px;
+  justify-content: center;
+}
+
+.tutorial .actions {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   width: 100%;
 }
-.actions .primary {
+
+.tutorial .actions .primary {
   grid-column: 2;
+  justify-self: center;
 }
-.actions .checkbox {
+
+.tutorial .actions .checkbox {
   grid-column: 3;
   justify-self: end;
   white-space: nowrap;
