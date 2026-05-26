@@ -1,4 +1,5 @@
 import { useGameStore } from "../store/useGameStore";
+import {Mouse, MousePointer2} from "lucide-react";
 
 export default function TutorialOverlay() {
   const setPhase = useGameStore((s) => s.setPhase);
@@ -10,7 +11,7 @@ export default function TutorialOverlay() {
         <div className="title">조작법</div>
         <div className="grid">
           <div className="t-item">
-            <div className="t-key">🖱️</div>
+            <div className="t-key"><MousePointer2 /></div>
             <div>
               <b>마우스 호버</b>
               <div>커서를 움직여 점프할 방향을 조준합니다.</div>
