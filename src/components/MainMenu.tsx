@@ -2,13 +2,11 @@ import { useGameStore } from "../store/useGameStore";
 
 export default function MainMenu() {
   const setPhase = useGameStore((s) => s.setPhase);
-  const resetRun = useGameStore((s) => s.resetRun);
   const highScore = useGameStore((s) => s.highScore);
   const showTutorial = useGameStore((s) => s.showTutorial);
   const setShowTutorial = useGameStore((s) => s.setShowTutorial);
 
   const start = () => {
-    resetRun();
     setPhase(showTutorial ? "tutorial" : "playing");
   };
 
@@ -26,7 +24,6 @@ export default function MainMenu() {
         <button
           className="ghost"
           onClick={() => {
-            resetRun();
             setPhase("playing");
           }}
         >

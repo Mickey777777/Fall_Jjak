@@ -9,7 +9,6 @@ import TutorialOverlay from "./components/TutorialOverlay";
 export default function App() {
   const phase = useGameStore((s) => s.phase);
   // 캔버스는 메뉴/튜토리얼 화면 뒤에서도 살아있게 둔다 (배경 + 부드러운 전환)
-  const isCanvasVisible = phase !== "menu";
   const paused = phase !== "playing";
 
   return (
@@ -17,7 +16,7 @@ export default function App() {
       {/* 항상 배경에 깔리는 부드러운 그라데이션 */}
       <div className="sky-bg" />
 
-      {isCanvasVisible && <GameCanvas paused={paused} />}
+      <GameCanvas paused={paused} />
       {phase === "playing" && <HUD />}
 
       {phase === "menu" && <MainMenu />}

@@ -36,7 +36,13 @@ export default function GameOverScreen() {
           >
             Retry
           </button>
-          <button className="ghost" onClick={() => setPhase("menu")}>
+          <button
+            className="ghost"
+            onClick={() => {
+              resetRun();
+              setPhase("menu");
+            }}
+          >
             Home
           </button>
         </div>
