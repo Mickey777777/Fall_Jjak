@@ -1,5 +1,25 @@
 # 폴 짝 (Fall Jjak)
 
+## 실행 방법
+
+```bash
+npm install
+npm run dev
+```
+
+브라우저에서 `http://localhost:5173/` 에 접속하면 바로 플레이할 수 있습니다.
+프로덕션 빌드는 `npm run build`, 빌드 결과 미리보기는 `npm run preview` 입니다.
+
+### 기술 스택
+
+- React 18 + TypeScript + Vite
+- React Three Fiber (Three.js) — 3D 렌더링
+- Zustand — 게임 상태 관리
+- Web Audio API — 효과음 합성
+- LocalStorage — 최고 점수 저장
+
+---
+
 ## 게임 소개
 
 「폴 짝」은 한 마리의 개구리가 끝없이 펼쳐진 오염된 연못 위를 연잎에서 연잎으로 점프해 나아가는 캐주얼 아케이드 게임입니다. 플레이어는 마우스와 키보드를 활용한 정교한 컨트롤로 점프의 거리·높이·방향을 조절하며, 변화무쌍한 연잎과 날씨, 다양한 적과 장애물을 극복해 최고 점수에 도전합니다.
