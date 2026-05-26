@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGameStore } from "../store/useGameStore";
 import { comboMultiplier, judgmentColor, judgmentText } from "../game/ScoreSystem";
 import { JUMP } from "../game/constants";
+import { Volume2, VolumeX } from "lucide-react";
 
 /**
  * 간소화된 HUD — 큰 점수 + 콤보 칩 + 가벼운 충전 바.
@@ -100,7 +101,7 @@ export default function HUD() {
 
       {/* 우상단 끝 — 음소거 + ESC 힌트 */}
       <button className="mute-btn" onClick={toggleMute} title="음소거">
-        {muted ? "🔇" : "🔊"}
+        {muted ? <VolumeX /> : <Volume2 />}
       </button>
     </div>
   );
