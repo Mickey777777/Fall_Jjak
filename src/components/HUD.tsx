@@ -2,7 +2,18 @@ import { useEffect, useState } from "react";
 import { useGameStore } from "../store/useGameStore";
 import { comboMultiplier, judgmentColor, judgmentText } from "../game/ScoreSystem";
 import { JUMP } from "../game/constants";
-import { Volume2, VolumeX } from "lucide-react";
+import type { BuffType, WeatherType } from "../game/types";
+import {
+  Cloud,
+  CloudFog,
+  CloudRain,
+  Gauge,
+  Star,
+  Volume2,
+  VolumeX,
+  Waves,
+  Wind,
+} from "lucide-react";
 
 /**
  * 간소화된 HUD — 큰 점수 + 콤보 칩 + 가벼운 충전 바.
@@ -40,6 +51,8 @@ export default function HUD() {
     0,
     Math.min(1, (arcHeight - JUMP.ARC_MIN) / (JUMP.ARC_MAX - JUMP.ARC_MIN)),
   );
+  const weatherMeta = getWeatherMeta(weather);
+  const WeatherIcon = weatherMeta.Icon;
 
   return (
     <div className="hud" onContextMenu={(e) => e.preventDefault()}>
@@ -72,17 +85,26 @@ export default function HUD() {
 
       {/* 좌측 하단 — 날씨 작은 칩 (clear일 땐 숨김) */}
       {weather !== "clear" && (
-        <div className="weather-chip">{weatherLabel(weather)}</div>
+        <div className="weather-chip">
+          <WeatherIcon />
+          <span>{weatherMeta.label}</span>
+        </div>
       )}
 
       {/* 우측 하단 — 버프 작은 칩들 */}
       <div className="buff-row">
-        {buffs.map((b) => (
-          <div className="buff-chip" key={b.type} style={{ background: buffColor(b.type) }}>
-            {buffEmoji(b.type)}
-            {b.remaining < 9000 ? ` ${b.remaining.toFixed(1)}s` : ""}
-          </div>
-        ))}
+        {buffs.map((b) => {
+          const buffMeta = getBuffMeta(b.type);
+          const BuffIcon = buffMeta.Icon;
+
+          return (
+            <div className="buff-chip" key={b.type} style={{ background: buffColor(b.type) }}>
+              <BuffIcon />
+              <span>{buffMeta.label}</span>
+              {b.remaining < 9000 ? <span>{b.remaining.toFixed(1)}s</span> : null}
+            </div>
+          );
+        })}
       </div>
 
       {/* 가운데 하단 — 충전 게이지 (얇은 바) + 궤적 SVG 작은 미리보기 */}
@@ -122,23 +144,24 @@ function ArcMeter({ ratio }: { ratio: number }) {
   );
 }
 
-function weatherLabel(w: string) {
-  return (
-    {
-      clear: "맑음",
-      fog: "🌫 안개",
-      wind: "💨 강풍",
-      rain: "🌧 호우",
-      cloud: "☁ 구름",
-    }[w] ?? w
-  );
+function getWeatherMeta(w: WeatherType) {
+  return {
+    clear: { Icon: Cloud, label: "맑음" },
+    fog: { Icon: CloudFog, label: "안개" },
+    wind: { Icon: Wind, label: "강풍" },
+    rain: { Icon: CloudRain, label: "폭우" },
+    cloud: { Icon: Cloud, label: "구름" },
+  }[w];
 }
-function buffEmoji(t: string) {
-  return (
-    { rangeUp: "🦘 사거리", swim: "💧 수영", scoreBoost: "✨ 부스트" }[t] ?? t
-  );
+
+function getBuffMeta(t: BuffType) {
+  return {
+    rangeUp: { Icon: Gauge, label: "사거리" },
+    swim: { Icon: Waves, label: "수영" },
+    scoreBoost: { Icon: Star, label: "부스트" },
+  }[t];
 }
-function buffColor(t: string) {
+function buffColor(t: BuffType) {
   return (
     { rangeUp: "#f5e26b", swim: "#83d2ff", scoreBoost: "#ff9bd1" }[t] ?? "#ccc"
   );

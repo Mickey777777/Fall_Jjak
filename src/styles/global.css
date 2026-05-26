@@ -124,6 +124,9 @@ body {
   position: absolute;
   bottom: 18px;
   left: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
@@ -142,12 +145,22 @@ body {
   gap: 6px;
 }
 .buff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 10px;
   border-radius: 999px;
   color: #1e2a2a;
   font-size: 12px;
   font-weight: 800;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+}
+.weather-chip svg,
+.buff-chip svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
 }
 
 /* 가운데 하단 충전 영역 */
