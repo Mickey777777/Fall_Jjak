@@ -332,13 +332,14 @@ button.ghost {
 .logo-jp {
   font-size: 80px;
   font-weight: 900;
-  color: var(--ink);
+  color: #f4fff0;
   letter-spacing: 0.08em;
-  text-shadow: 0 8px 0 rgba(0, 0, 0, 0.06);
+  text-shadow: 0 8px 0 #2f7d32;
 }
 .logo-sub {
   font-size: 14px;
-  color: var(--ink-soft);
+  font-weight: 700;
+  color: rgba(244, 255, 240, 0.82);
   margin-top: 12px;
   letter-spacing: 0.06em;
 }
