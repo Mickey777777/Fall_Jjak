@@ -124,6 +124,9 @@ body {
   position: absolute;
   bottom: 18px;
   left: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
@@ -142,12 +145,22 @@ body {
   gap: 6px;
 }
 .buff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 10px;
   border-radius: 999px;
   color: #1e2a2a;
   font-size: 12px;
   font-weight: 800;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+}
+.weather-chip svg,
+.buff-chip svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
 }
 
 /* 가운데 하단 충전 영역 */
@@ -319,13 +332,14 @@ button.ghost {
 .logo-jp {
   font-size: 80px;
   font-weight: 900;
-  color: var(--ink);
+  color: #f4fff0;
   letter-spacing: 0.08em;
-  text-shadow: 0 8px 0 rgba(0, 0, 0, 0.06);
+  text-shadow: 0 8px 0 #2f7d32;
 }
 .logo-sub {
   font-size: 14px;
-  color: var(--ink-soft);
+  font-weight: 700;
+  color: rgba(244, 255, 240, 0.82);
   margin-top: 12px;
   letter-spacing: 0.06em;
 }
