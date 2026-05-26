@@ -58,7 +58,6 @@ interface GameState {
   buffs: ActiveBuff[];
   // 옵션
   muted: boolean;
-  showTutorial: boolean;
   // ──────────── 액션 ────────────
   setPhase: (p: GamePhase) => void;
   resetRun: () => void;
@@ -79,7 +78,6 @@ interface GameState {
   incrementFlies: () => void;
   incrementPads: () => void;
   toggleMute: () => void;
-  setShowTutorial: (b: boolean) => void;
 }
 
 const initialRunState = {
@@ -107,7 +105,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   runId: 0,
   highScore: loadHighScore(),
   muted: loadMuted(),
-  showTutorial: true,
   ...initialRunState,
 
   setPhase: (p) => set({ phase: p }),
@@ -192,5 +189,4 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set({ muted: next });
   },
-  setShowTutorial: (b) => set({ showTutorial: b }),
 }));
