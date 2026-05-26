@@ -71,6 +71,7 @@ export default function HUD() {
       )}
 
       {/* 가운데 상단 — 판정 텍스트 (애니메이션) */}
+      {/* 좌측 하단 — 날씨 작은 칩 (clear일 땐 숨김) */}
       <div className="hud-center">
         {judgmentVisible && lastJudgment ? (
           <div
@@ -83,7 +84,6 @@ export default function HUD() {
         ) : null}
       </div>
 
-      {/* 좌측 하단 — 날씨 작은 칩 (clear일 땐 숨김) */}
       {weather !== "clear" && (
         <div className="weather-chip">
           <WeatherIcon />
