@@ -12,6 +12,7 @@ interface Props {
   arcHeight: number;
   isCharging: boolean;
   isJumping: boolean;
+  yarrBurst: { x: number; z: number; bornAt: number } | null;
 }
 
 /**
@@ -31,6 +32,7 @@ export default function EffectsManager({
   arcHeight,
   isCharging,
   isJumping,
+  yarrBurst,
 }: Props) {
   const popups = useGameStore((s) => s.popups);
   const archRefs = useRef<(Mesh | null)[]>([]);
@@ -115,6 +117,52 @@ export default function EffectsManager({
               color={popupColor(p.type)}
               transparent
               opacity={opacity * 0.85}
+            />
+          </mesh>
+        );
+      })}
+
+      {yarrBurst ? <YarrBurst burst={yarrBurst} /> : null}
+    </group>
+  );
+}
+
+function YarrBurst({ burst }: { burst: { x: number; z: number; bornAt: number } }) {
+  const age = (performance.now() - burst.bornAt) / 1000;
+  if (age > 1) return null;
+
+  const p = Math.min(1, age);
+  const opacity = Math.max(0, 1 - p);
+  const rays = Array.from({ length: 14 });
+
+  return (
+    <group position={[burst.x, 0.34, burst.z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[1 + p * 2.2, 1 + p * 2.2, 1]}>
+        <ringGeometry args={[0.35, 0.48, 32]} />
+        <meshBasicMaterial color="#ffd84d" transparent opacity={opacity * 0.75} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} scale={[0.7 + p * 1.4, 0.7 + p * 1.4, 1]}>
+        <ringGeometry args={[0.55, 0.72, 32]} />
+        <meshBasicMaterial color="#fff6a6" transparent opacity={opacity * 0.55} />
+      </mesh>
+      {rays.map((_, i) => {
+        const a = (i / rays.length) * Math.PI * 2;
+        const dist = 0.45 + p * 1.8;
+        const y = 0.16 + Math.sin(p * Math.PI) * (0.45 + (i % 3) * 0.08);
+        const scale = 0.09 + (i % 4) * 0.018;
+
+        return (
+          <mesh
+            key={i}
+            position={[Math.cos(a) * dist, y, Math.sin(a) * dist]}
+            rotation={[0, -a, Math.PI / 4]}
+            scale={[scale * 1.8, scale, scale]}
+          >
+            <boxGeometry args={[1, 1, 1]} />
+            <meshBasicMaterial
+              color={i % 2 === 0 ? "#ffe45c" : "#fff6b8"}
+              transparent
+              opacity={opacity}
             />
           </mesh>
         );

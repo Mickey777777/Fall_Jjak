@@ -82,6 +82,7 @@ export default function LilyPadManager({ paused }: Props) {
   const nextWeatherIn = useRef(20);
   const shakeRef = useRef(0);
   const zoomRef = useRef(false);
+  const [yarrBurst, setYarrBurst] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   /** 카메라가 따라가는 "지면" 위치 — 착지할 때만 갱신되어 공중 비행 동안 배경이 흔들리지 않음 */
   const landedPos = useRef({ x: 0, z: 0 });
 
@@ -409,6 +410,7 @@ export default function LilyPadManager({ paused }: Props) {
       shakeRef.current = 0.4;
       zoomRef.current = true;
       zoomReleaseAt.current = performance.now() / 1000;
+      setYarrBurst({ x: pad.position[0], z: pad.position[2], bornAt: performance.now() });
     } else {
       shakeRef.current = Math.max(shakeRef.current, 0.15);
     }
@@ -661,6 +663,7 @@ export default function LilyPadManager({ paused }: Props) {
         arcHeight={arcHeightRef.current}
         isCharging={chargingRef.current}
         isJumping={!!jumpPlanRef.current}
+        yarrBurst={yarrBurst}
       />
     </>
   );
