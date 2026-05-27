@@ -33,7 +33,7 @@ import type {
 } from "./types";
 import { playJudgment, playPlop, playSlurp, playSpring } from "./sound";
 // 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
-const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = "rotating";
+const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
 
 interface Props {
   paused: boolean;
