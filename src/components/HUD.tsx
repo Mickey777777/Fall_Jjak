@@ -60,7 +60,7 @@ export default function HUD() {
         <div className="score-hi">BEST {highScore.toLocaleString()}</div>
       </div>
 
-      {/* 우상단 — 콤보 칩 (콤보 1 이상일 때만 표시) */}
+      {/* 중앙 상단 — 콤보 칩 (콤보 1 이상일 때만 표시) */}
       {combo > 0 && (
         <div className="combo-chip" key={combo}>
           <span className="combo-num">×{combo}</span>
