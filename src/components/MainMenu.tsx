@@ -77,7 +77,7 @@ export default function MainMenu() {
         </button>
         <div className="menu-actions">
           <button className="ghost" onClick={() => setPhase("control")}>
-            조작법 확인
+            조작법
           </button>
           <button className="ghost help-button" onClick={() => setHelpOpen(true)}>
             <HelpCircle aria-hidden="true" />
@@ -85,7 +85,7 @@ export default function MainMenu() {
           </button>
         </div>
 
-        <div className="row hi">최고 점수: {highScore.toLocaleString()}</div>
+        <div className="row hi">Best: {highScore.toLocaleString()}</div>
       </div>
 
       {helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
