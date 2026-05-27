@@ -1,4 +1,4 @@
-﻿/* ──────────────────────────────────────────────
+/* ──────────────────────────────────────────────
  * 폴 짝 — 글로벌 스타일
  * 빅 픽셀/도트 아트 분위기를 잡기 위해 픽셀 글꼴 + 부드러운 그라데이션
  * ────────────────────────────────────────────── */
@@ -290,11 +290,51 @@ body {
   align-items: center;
 }
 
+.card.big.new-record {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--gold);
+  animation: recordCardPop 0.42s cubic-bezier(0.16, 1.25, 0.42, 1) both;
+}
+
+.card.big.new-record::before {
+  content: "";
+  position: absolute;
+  inset: -28px;
+  z-index: -1;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle, rgba(255, 216, 77, 0.58) 0%, rgba(255, 216, 77, 0.18) 48%, rgba(255, 216, 77, 0) 72%);
+  filter: blur(4px);
+  opacity: 0;
+  animation: recordGlow 0.82s ease-out both;
+  pointer-events: none;
+}
+
 .card .title {
   font-size: 24px;
   font-weight: 800;
   color: var(--ink);
   margin-bottom: 6px;
+}
+
+.record-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #c98d00;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.72);
+  animation: recordTitlePulse 0.68s ease-out both;
+}
+
+.record-title svg {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  fill: #ffd84d;
+  stroke: #a66d00;
+  stroke-width: 2.4;
 }
 
 button {
@@ -462,6 +502,54 @@ button.ghost {
   font-weight: 800;
   color: var(--ink);
   margin-top: 4px;
+}
+.stat-value.record-value {
+  color: var(--accent-dark);
+  text-shadow:
+    0 1px 0 #fff8bf,
+    0 0 10px rgba(255, 216, 77, 0.55);
+}
+
+@keyframes recordCardPop {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.88);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.035);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes recordTitlePulse {
+  0% {
+    transform: scale(0.92);
+  }
+  38% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes recordGlow {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0.62;
+    transform: scale(1);
+  }
 }
 
 /* 일시정지 */
