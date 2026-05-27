@@ -78,6 +78,9 @@ interface GameState {
   incrementFlies: () => void;
   incrementPads: () => void;
   toggleMute: () => void;
+  setShowTutorial: (b: boolean) => void;
+  crocWarning: boolean;
+  setCrocWarning: (b: boolean) => void;
 }
 
 const initialRunState = {
@@ -98,6 +101,7 @@ const initialRunState = {
   weather: "clear" as WeatherType,
   wind: { direction: 0, strength: 0 } as WindState,
   buffs: [] as ActiveBuff[],
+  crocWarning: false,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -189,4 +193,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set({ muted: next });
   },
+  setShowTutorial: (b) => set({ showTutorial: b }),
+  setCrocWarning: (b) => set({ crocWarning: b }),
 }));

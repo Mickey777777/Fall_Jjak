@@ -10,9 +10,10 @@ import ItemManager from "./ItemManager";
 import WeatherSystem from "./WeatherSystem";
 import EffectsManager from "./EffectsManager";
 import BackgroundDecor from "./BackgroundDecor";
+import CrocEnemy from "./CrocEnemy";
 
 import { useGameStore } from "../store/useGameStore";
-import { JUMP, LILY, WORLD, SCORE as SCORECONST } from "./constants";
+import { ENEMY, JUMP, LILY, WORLD, SCORE as SCORECONST } from "./constants";
 import {
   difficultyOf,
   enemyProb,
@@ -31,6 +32,7 @@ import type {
   JudgmentPopup,
   LilyPadData,
 } from "./types";
+import { playCrocSnap, playCrocWarnIfNeeded, playJudgment, playPlop, playSlurp, playSpring } from "./sound";
 import { playJudgment, playPlop, playSlurp, playSpring } from "./sound";
 // 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
 const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
@@ -65,6 +67,7 @@ export default function LilyPadManager({ paused }: Props) {
   const addBuff = useGameStore((s) => s.addBuff);
   const consumeSwimBuff = useGameStore((s) => s.consumeSwimBuff);
   const triggerTongue = useGameStore((s) => s.triggerTongue);
+  const setCrocWarning = useGameStore((s) => s.setCrocWarning);
 
   // ──────── 시뮬레이션 상태 (ref로 보관해 매 프레임 자유롭게 변경) ────────
   const frog = useRef({ x: 0, y: 0, z: 0 });
@@ -87,6 +90,12 @@ export default function LilyPadManager({ paused }: Props) {
   const [yarrBurst, setYarrBurst] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   /** 카메라가 따라가는 "지면" 위치 — 착지할 때만 갱신되어 공중 비행 동안 배경이 흔들리지 않음 */
   const landedPos = useRef({ x: 0, z: 0 });
+
+  // 악어 위치 (월드 좌표)
+  const crocRef = useRef({ x: -ENEMY.CROC_BASE_DISTANCE, z: 0 });
+  // 직전 프레임의 경고 상태 — store 업데이트를 변화 시점에만 호출하기 위해
+  const crocWasWarnRef = useRef(false);
+
   const slideRef = useRef<{
     vx: number;
     vz: number;
@@ -299,6 +308,34 @@ export default function LilyPadManager({ paused }: Props) {
 
     expirePopups(performance.now());
     tickBuffs(dt);
+
+    // ── 악어 이동 및 충돌 ──
+    {
+      const diff = difficultyOf(useGameStore.getState().distance);
+      const crocSpeed = ENEMY.CROC_SPEED * (1 + diff * 2);
+      crocRef.current.x += crocSpeed * dt;
+      // Z 방향으로 개구리를 느리게 추적 (프레임독립적 lerp)
+      crocRef.current.z += (frog.current.z - crocRef.current.z) * (1 - Math.exp(-1.2 * dt));
+
+      const cdx = frog.current.x - crocRef.current.x;
+      const cdz = frog.current.z - crocRef.current.z;
+      const crocDist = Math.hypot(cdx, cdz);
+
+      // 경고 (4.5m 이내) — 상태 변화 시에만 store 갱신
+      const nowWarn = crocDist < 4.5;
+      if (nowWarn !== crocWasWarnRef.current) {
+        crocWasWarnRef.current = nowWarn;
+        setCrocWarning(nowWarn);
+      }
+      if (nowWarn) playCrocWarnIfNeeded();
+
+      // 충돌 (지면에 있을 때만)
+      if (!jumpPlanRef.current && crocDist < 1.8) {
+        playCrocSnap();
+        finishRun();
+        return;
+      }
+    }
 
     // 카메라 shake 감쇠
     shakeRef.current = Math.max(0, shakeRef.current - dt * 2.5);
@@ -792,6 +829,12 @@ export default function LilyPadManager({ paused }: Props) {
         />
       ))}
       <EnemyManager enemies={enemies} now={performance.now() / 1000} />
+      <CrocEnemy
+        x={crocRef.current.x}
+        z={crocRef.current.z}
+        now={performance.now() / 1000}
+        danger={crocWasWarnRef.current}
+      />
       <ItemManager items={items} now={performance.now() / 1000} />
       <EffectsManager
         frogX={frog.current.x}
