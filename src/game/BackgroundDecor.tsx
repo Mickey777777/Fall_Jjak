@@ -1,6 +1,6 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
-import { type InstancedMesh, Matrix4 } from "three";
+import { type InstancedMesh, type Mesh, Matrix4 } from "three";
 import { initSlots, slotHash, updateSlots } from "./slotRecycler";
 
 interface Props {
@@ -15,12 +15,16 @@ interface Props {
 const BANK_Z = 12.5;
 
 // 각 장식의 (instance 수, 슬롯 폭, cullBehind)
-const GRASS = { N: 44, SPACING: 1.0, CULL: 10 };
-const TREE = { N: 16, SPACING: 5.0, CULL: 2 };
+// GRASS/TREE 는 카메라 시야 끝(fog far)까지 둑이 끊겨 보이지 않도록 충분한 N 을 확보한다.
+const GRASS = { N: 80, SPACING: 1.0, CULL: 12 };
+const TREE = { N: 26, SPACING: 5.0, CULL: 3 };
 const REED = { N: 28, SPACING: 2.4, CULL: 4 };
 const FLOWER = { N: 22, SPACING: 3.0, CULL: 3 };
 const PEBBLE = { N: 18, SPACING: 3.6, CULL: 3 };
 const TRASH = { N: 6, SPACING: 12.0, CULL: 1 };
+// 외곽 잔디 띠(나무 라인) 위에 깔리는 추가 장식 — 둑이 단조로워 보이지 않도록
+const OUTER_FLOWER = { N: 40, SPACING: 1.8, CULL: 3 };
+const MUSHROOM = { N: 16, SPACING: 3.6, CULL: 2 };
 
 export default function BackgroundDecor({ frogX }: Props) {
   // 슬롯 메모리
@@ -31,6 +35,8 @@ export default function BackgroundDecor({ frogX }: Props) {
   const flowerSlots = useRef<number[]>(initSlots(FLOWER.N, FLOWER.CULL));
   const pebbleSlots = useRef<number[]>(initSlots(PEBBLE.N, PEBBLE.CULL));
   const trashSlots = useRef<number[]>(initSlots(TRASH.N, TRASH.CULL));
+  const outerFlowerSlots = useRef<number[]>(initSlots(OUTER_FLOWER.N, OUTER_FLOWER.CULL));
+  const mushroomSlots = useRef<number[]>(initSlots(MUSHROOM.N, MUSHROOM.CULL));
 
   // InstancedMesh refs
   const grassNorthRef = useRef<InstancedMesh>(null);
@@ -39,6 +45,9 @@ export default function BackgroundDecor({ frogX }: Props) {
   const grassSouthDarkRef = useRef<InstancedMesh>(null);
   const dirtNorthRef = useRef<InstancedMesh>(null);
   const dirtSouthRef = useRef<InstancedMesh>(null);
+  // 외곽 잔디 띠 — 카메라 따라가는 단일 큰 평면 (슬롯 박스가 사선 시야에서 끊겨 보이는 문제 회피)
+  const groundNorthRef = useRef<Mesh>(null);
+  const groundSouthRef = useRef<Mesh>(null);
   const treeTrunkRef = useRef<InstancedMesh>(null);
   const treeLeafRef = useRef<InstancedMesh>(null);
   const reedRef = useRef<InstancedMesh>(null);
@@ -46,10 +55,21 @@ export default function BackgroundDecor({ frogX }: Props) {
   const flowerCenterRef = useRef<InstancedMesh>(null);
   const pebbleRef = useRef<InstancedMesh>(null);
   const canRef = useRef<InstancedMesh>(null);
+  const outerFlowerPetalRef = useRef<InstancedMesh>(null);
+  const outerFlowerCenterRef = useRef<InstancedMesh>(null);
+  const outerFlower2PetalRef = useRef<InstancedMesh>(null);
+  const mushroomStemRef = useRef<InstancedMesh>(null);
+  const mushroomCapRef = useRef<InstancedMesh>(null);
+  const mushroomDotRef = useRef<InstancedMesh>(null);
 
   const tmp = useMemo(() => new Matrix4(), []);
 
   useFrame(() => {
+    // ⓪ 외곽 잔디 평면 — 카메라 시야 안에 항상 충분히 들어오도록 frogX 따라 이동
+    const xSnap = Math.floor(frogX);
+    if (groundNorthRef.current) groundNorthRef.current.position.x = xSnap;
+    if (groundSouthRef.current) groundSouthRef.current.position.x = xSnap;
+
     // ① 잔디 둑 — 양쪽에 각각 안쪽(밝은) + 바깥쪽(진한) + 흙 단면
     const placeGrass = (
       slots: number[],
@@ -189,6 +209,81 @@ export default function BackgroundDecor({ frogX }: Props) {
       mesh.instanceMatrix.needsUpdate = true;
     }
 
+    // ⑤-b 외곽 띠 위 작은 꽃 (두 색) — 잎은 hash 로 핑크 vs 보라 두 그룹에 나눠 배치
+    if (
+      outerFlowerPetalRef.current &&
+      outerFlowerCenterRef.current &&
+      outerFlower2PetalRef.current
+    ) {
+      const petal = outerFlowerPetalRef.current;
+      const petal2 = outerFlower2PetalRef.current;
+      const center = outerFlowerCenterRef.current;
+      // 미사용 인스턴스는 화면 밖으로 밀어내기 위한 큰 음수 Y
+      const HIDE_Y = -100;
+      updateSlots(
+        outerFlowerSlots.current,
+        frogX,
+        OUTER_FLOWER.SPACING,
+        OUTER_FLOWER.CULL,
+        (i, s) => {
+          const side: 1 | -1 = slotHash(s, 81) > 0.5 ? 1 : -1;
+          const x =
+            s * OUTER_FLOWER.SPACING +
+            (slotHash(s, 82) - 0.5) * OUTER_FLOWER.SPACING * 0.7;
+          const z = side * (BANK_Z + 1.0 + slotHash(s, 83) * 2.6);
+          const y = -0.05 + slotHash(s, 84) * 0.04;
+          const isPink = slotHash(s, 85) > 0.45;
+          // 꽃 잎 — 색상 그룹에 따라 한 쪽만 표시
+          tmp.makeScale(0.22, 0.22, 0.22);
+          tmp.setPosition(x, isPink ? y : HIDE_Y, z);
+          petal.setMatrixAt(i, tmp);
+          tmp.setPosition(x, isPink ? HIDE_Y : y, z);
+          petal2.setMatrixAt(i, tmp);
+          // 중심 (공통)
+          tmp.makeScale(0.10, 0.10, 0.10);
+          tmp.setPosition(x, y + 0.10, z);
+          center.setMatrixAt(i, tmp);
+        },
+      );
+      petal.count = OUTER_FLOWER.N;
+      petal2.count = OUTER_FLOWER.N;
+      center.count = OUTER_FLOWER.N;
+      petal.instanceMatrix.needsUpdate = true;
+      petal2.instanceMatrix.needsUpdate = true;
+      center.instanceMatrix.needsUpdate = true;
+    }
+
+    // ⑤-c 외곽 띠 위 버섯 — 줄기 + 빨강 갓 + 흰 점
+    if (mushroomStemRef.current && mushroomCapRef.current && mushroomDotRef.current) {
+      const stem = mushroomStemRef.current;
+      const cap = mushroomCapRef.current;
+      const dot = mushroomDotRef.current;
+      updateSlots(mushroomSlots.current, frogX, MUSHROOM.SPACING, MUSHROOM.CULL, (i, s) => {
+        const side: 1 | -1 = slotHash(s, 91) > 0.5 ? 1 : -1;
+        const x =
+          s * MUSHROOM.SPACING + (slotHash(s, 92) - 0.5) * MUSHROOM.SPACING * 0.6;
+        const z = side * (BANK_Z + 1.3 + slotHash(s, 93) * 2.0);
+        const stemH = 0.20 + slotHash(s, 94) * 0.10;
+        const baseY = -0.05;
+        tmp.makeScale(0.12, stemH, 0.12);
+        tmp.setPosition(x, baseY + stemH * 0.5, z);
+        stem.setMatrixAt(i, tmp);
+        const capR = 0.26 + slotHash(s, 95) * 0.08;
+        tmp.makeScale(capR, 0.12, capR);
+        tmp.setPosition(x, baseY + stemH + 0.06, z);
+        cap.setMatrixAt(i, tmp);
+        tmp.makeScale(0.07, 0.04, 0.07);
+        tmp.setPosition(x, baseY + stemH + 0.13, z);
+        dot.setMatrixAt(i, tmp);
+      });
+      stem.count = MUSHROOM.N;
+      cap.count = MUSHROOM.N;
+      dot.count = MUSHROOM.N;
+      stem.instanceMatrix.needsUpdate = true;
+      cap.instanceMatrix.needsUpdate = true;
+      dot.instanceMatrix.needsUpdate = true;
+    }
+
     // ⑥ 캔/병 (오염 요소 소량)
     if (canRef.current) {
       const mesh = canRef.current;
@@ -269,6 +364,26 @@ export default function BackgroundDecor({ frogX }: Props) {
         <meshStandardMaterial color={"#7a4d2c"} roughness={1} />
       </instancedMesh>
 
+      {/* 둑 외곽 잔디 평면 — 카메라 따라 X 이동, 양쪽 모두 시야 끝까지 끊김 없이 덮음 */}
+      <mesh
+        ref={groundNorthRef}
+        position={[0, -0.25, BANK_Z + 2.5]}
+        receiveShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[260, 0.4, 5]} />
+        <meshStandardMaterial color={"#92bf3e"} roughness={1} />
+      </mesh>
+      <mesh
+        ref={groundSouthRef}
+        position={[0, -0.25, -(BANK_Z + 2.5)]}
+        receiveShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[260, 0.4, 5]} />
+        <meshStandardMaterial color={"#92bf3e"} roughness={1} />
+      </mesh>
+
       {/* 나무 줄기 */}
       <instancedMesh
         ref={treeTrunkRef}
@@ -326,6 +441,60 @@ export default function BackgroundDecor({ frogX }: Props) {
       >
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={"#9c9c9c"} roughness={1} />
+      </instancedMesh>
+
+      {/* 외곽 띠 위 작은 꽃 — 핑크 / 보라 두 색 + 노랑 중심 */}
+      <instancedMesh
+        ref={outerFlowerPetalRef}
+        args={[undefined, undefined, OUTER_FLOWER.N]}
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={"#ffb1d6"} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={outerFlower2PetalRef}
+        args={[undefined, undefined, OUTER_FLOWER.N]}
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={"#b793f0"} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={outerFlowerCenterRef}
+        args={[undefined, undefined, OUTER_FLOWER.N]}
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={"#fff3a0"} roughness={1} />
+      </instancedMesh>
+
+      {/* 외곽 띠 위 버섯 — 흰 줄기 + 빨강 갓 + 흰 점 */}
+      <instancedMesh
+        ref={mushroomStemRef}
+        args={[undefined, undefined, MUSHROOM.N]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={"#fff5dc"} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={mushroomCapRef}
+        args={[undefined, undefined, MUSHROOM.N]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={"#e34a4a"} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={mushroomDotRef}
+        args={[undefined, undefined, MUSHROOM.N]}
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={"#fff5dc"} roughness={1} />
       </instancedMesh>
 
       {/* 캔/병 */}
