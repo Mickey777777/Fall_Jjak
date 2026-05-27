@@ -62,7 +62,7 @@ export default function HUD() {
 
       {/* 우상단 — 콤보 칩 (콤보 1 이상일 때만 표시) */}
       {combo > 0 && (
-        <div className="combo-chip">
+        <div className="combo-chip" key={combo}>
           <span className="combo-num">×{combo}</span>
           <span className="combo-mult">{mult.toFixed(1)}배</span>
         </div>

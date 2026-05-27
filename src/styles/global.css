@@ -99,12 +99,14 @@ body {
 /* 우상단 콤보 칩 */
 .combo-chip {
   position: absolute;
-  top: 14px;
-  right: 18px;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
+  animation: comboPop 0.28s cubic-bezier(0.16, 1.35, 0.42, 1) both;
 }
 .combo-num {
   font-size: 38px;
@@ -117,6 +119,18 @@ body {
   font-weight: 800;
   color: #ffffff;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+@keyframes comboPop {
+  0% {
+    transform: translateX(-50%) scale(0.82);
+  }
+  58% {
+    transform: translateX(-50%) scale(1.18);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
 }
 
 /* 좌측 하단 날씨 칩 */
