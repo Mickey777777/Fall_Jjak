@@ -27,17 +27,13 @@ export default function GameOverScreen() {
           )}
         </div>
         <div className="big-score">{score.toLocaleString()}</div>
+        <div className="best-score">Best: {highScore.toLocaleString()}</div>
 
         <div className="stats">
           <Stat label="이동 거리" value={`${distance.toFixed(1)} m`} />
           <Stat label="밟은 연잎" value={`${padsLanded}`} />
           <Stat label="최고 콤보" value={`${maxCombo}`} />
           <Stat label="잡아먹은 파리" value={`${fliesEaten}`} />
-          <Stat
-            label="최고 점수"
-            value={highScore.toLocaleString()}
-            highlight={isNew}
-          />
         </div>
 
         <div className="actions">

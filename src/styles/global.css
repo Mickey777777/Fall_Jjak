@@ -479,7 +479,13 @@ button.ghost {
   font-size: 56px;
   font-weight: 900;
   color: var(--accent-dark);
-  margin: 8px 0 20px;
+  margin: 8px 0 6px;
+}
+.gameover .best-score {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(120, 132, 128, 0.72);
+  margin-bottom: 16px;
 }
 .gameover .stats {
   display: grid;
