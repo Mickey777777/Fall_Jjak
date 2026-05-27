@@ -183,27 +183,30 @@ function createPopupTexture(text: string, color: string) {
 
   const ctx = canvas.getContext("2d");
   if (ctx) {
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.font = '900 44px "Galmuri11", "Press Start 2P", "DungGeunMo", sans-serif';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
-    ctx.shadowBlur = 8;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.42)";
+    ctx.shadowBlur = 9;
     ctx.shadowOffsetX = 3;
     ctx.shadowOffsetY = 4;
     ctx.lineWidth = 10;
-    ctx.strokeStyle = "#17302b";
-    ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+    ctx.strokeStyle = "rgba(11, 29, 25, 0.95)";
+    ctx.strokeText(text, cx, cy);
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
-    ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.strokeText(text, cx, cy);
     ctx.fillStyle = color;
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    ctx.fillText(text, cx, cy);
   }
 
   const texture = new CanvasTexture(canvas);
