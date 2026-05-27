@@ -1,19 +1,28 @@
 import {
+  CheckCircle2,
   Cloud,
   CloudFog,
   CloudRain,
   Gauge,
   HelpCircle,
+  type LucideIcon,
   Star,
+  Trophy,
   Waves,
   Wind,
 } from "lucide-react";
 import { useState } from "react";
 import { useGameStore } from "../store/useGameStore";
 
-type HelpTab = "weather" | "buff";
+type HelpTab = "weather" | "buff" | "judgment";
+type HelpItem = {
+  Icon: LucideIcon;
+  name: string;
+  description: string;
+  color?: string;
+};
 
-const WEATHER_HELP = [
+const WEATHER_HELP: HelpItem[] = [
   {
     Icon: Cloud,
     name: "맑음",
@@ -41,21 +50,45 @@ const WEATHER_HELP = [
   },
 ];
 
-const BUFF_HELP = [
+const BUFF_HELP: HelpItem[] = [
   {
     Icon: Gauge,
     name: "사거리",
+    color: "#d6bd24",
     description: "잠시 동안 점프 사거리가 늘어나 더 먼 연잎을 노릴 수 있습니다.",
   },
   {
     Icon: Waves,
     name: "수영",
+    color: "#3498d8",
     description: "물에 빠졌을 때 한 번 생존해 가까운 연잎으로 복귀합니다.",
   },
   {
     Icon: Star,
     name: "부스트",
+    color: "#d65b9f",
     description: "일정 시간 동안 획득 점수가 증가합니다.",
+  },
+];
+
+const JUDGMENT_HELP: HelpItem[] = [
+  {
+    Icon: Trophy,
+    name: "Yarr! +30",
+    color: "#F59E0B",
+    description: "연잎 중앙에 아주 가깝게 착지했을 때 받는 최고 판정입니다.",
+  },
+  {
+    Icon: CheckCircle2,
+    name: "Great +20",
+    color: "#22C55E",
+    description: "안정적으로 좋은 위치에 착지했을 때 받는 판정입니다.",
+  },
+  {
+    Icon: Star,
+    name: "Not bad.. +10",
+    color: "#9CA3AF",
+    description: "연잎에 착지했지만 중심에서 조금 벗어났을 때 받는 기본 판정입니다.",
   },
 ];
 
@@ -77,7 +110,7 @@ export default function MainMenu() {
         </button>
         <div className="menu-actions">
           <button className="ghost" onClick={() => setPhase("control")}>
-            조작법
+            조작법 확인
           </button>
           <button className="ghost help-button" onClick={() => setHelpOpen(true)}>
             <HelpCircle aria-hidden="true" />
@@ -95,7 +128,12 @@ export default function MainMenu() {
 
 function HelpDialog({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<HelpTab>("weather");
-  const items = tab === "weather" ? WEATHER_HELP : BUFF_HELP;
+  const items =
+    tab === "weather"
+      ? WEATHER_HELP
+      : tab === "buff"
+        ? BUFF_HELP
+        : JUDGMENT_HELP;
 
   return (
     <div className="help-backdrop" onMouseDown={onClose}>
@@ -120,12 +158,18 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
           >
             버프
           </button>
+          <button
+            className={tab === "judgment" ? "active" : ""}
+            onClick={() => setTab("judgment")}
+          >
+            판정
+          </button>
         </div>
 
         <div className="help-list">
           {items.map((item) => (
             <div className="help-item" key={item.name}>
-              <div className="help-item-name">
+              <div className="help-item-name" style={{ color: item.color }}>
                 <item.Icon aria-hidden="true" />
                 {item.name}
               </div>

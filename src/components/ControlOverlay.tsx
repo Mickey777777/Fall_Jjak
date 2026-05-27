@@ -59,12 +59,6 @@ export default function ControlOverlay() {
             </div>
           </div>
         </div>
-
-        <div className="judgments">
-          <span style={{ color: "#F59E0B" }}>Yarr! +30</span>
-          <span style={{ color: "#22C55E" }}>Great +20</span>
-          <span style={{ color: "#9CA3AF" }}>Not bad.. +10</span>
-        </div>
       </div>
     </div>
   );
