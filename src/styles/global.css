@@ -198,32 +198,6 @@ body {
   letter-spacing: 0.05em;
 }
 
-.hud-center {
-  position: absolute;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  text-align: center;
-  pointer-events: none;
-}
-.judgment {
-  display: inline-block;
-  font-size: 44px;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  animation: judgmentPop 0.7s ease-out;
-  text-shadow:
-    0 0 12px rgba(255, 255, 200, 0.5),
-    0 4px 0 rgba(0, 0, 0, 0.35);
-}
-@keyframes judgmentPop {
-  0% { transform: scale(0.6); opacity: 0; }
-  20% { transform: scale(1.25); opacity: 1; }
-  60% { transform: scale(1.0); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0; }
-}
-
 .mute-btn {
   position: absolute;
   top: 16px;

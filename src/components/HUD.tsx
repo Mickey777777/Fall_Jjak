@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "../store/useGameStore";
-import { comboMultiplier, judgmentColor, judgmentText } from "../game/ScoreSystem";
+import { comboMultiplier } from "../game/ScoreSystem";
 import { JUMP } from "../game/constants";
 import type { BuffType, WeatherType } from "../game/types";
 import {
@@ -23,8 +23,6 @@ export default function HUD() {
   const score = useGameStore((s) => s.score);
   const highScore = useGameStore((s) => s.highScore);
   const combo = useGameStore((s) => s.combo);
-  const lastJudgment = useGameStore((s) => s.lastJudgment);
-  const lastJudgmentAt = useGameStore((s) => s.lastJudgmentAt);
   const chargeDist = useGameStore((s) => s.chargeDistance);
   const isCharging = useGameStore((s) => s.isCharging);
   const arcHeight = useGameStore((s) => s.arcHeight);
@@ -39,9 +37,6 @@ export default function HUD() {
     const id = window.setInterval(() => setTick((x) => x + 1), 80);
     return () => window.clearInterval(id);
   }, []);
-
-  const judgmentVisible =
-    lastJudgment != null && performance.now() - lastJudgmentAt < 700;
 
   const mult = comboMultiplier(combo);
   const chargeRatio = Math.max(
@@ -73,20 +68,7 @@ export default function HUD() {
         </div>
       )}
 
-      {/* 가운데 상단 — 판정 텍스트 (애니메이션) */}
       {/* 좌측 하단 — 날씨 작은 칩 (clear일 땐 숨김) */}
-      <div className="hud-center">
-        {judgmentVisible && lastJudgment ? (
-          <div
-            className="judgment"
-            key={lastJudgmentAt}
-            style={{ color: judgmentColor(lastJudgment) }}
-          >
-            {judgmentText(lastJudgment)}
-          </div>
-        ) : null}
-      </div>
-
       {weather !== "clear" && (
         <div className="weather-chip">
           <WeatherIcon />

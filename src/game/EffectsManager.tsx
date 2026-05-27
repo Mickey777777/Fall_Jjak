@@ -1,8 +1,10 @@
-import { useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
+import { CanvasTexture, LinearFilter } from "three";
 import type { Mesh, MeshBasicMaterial } from "three";
 import { useGameStore } from "../store/useGameStore";
 import { JUMP } from "./constants";
+import type { JudgmentPopup } from "./types";
 
 interface Props {
   frogX: number;
@@ -104,27 +106,81 @@ export default function EffectsManager({
       {/* 판정 popup */}
       {popups.map((p) => {
         const age = (performance.now() - p.bornAt) / 900;
-        const y = 0.5 + age * 1.6;
+        const y = 0.95;
         const opacity = Math.max(0, 1 - age);
         return (
-          <mesh
+          <PopupText
             key={p.id}
-            position={[p.position[0], p.position[1] + y, p.position[2]]}
-            rotation={[-0.5, 0, 0]}
-          >
-            <planeGeometry args={[2.5 + p.text.length * 0.05, 0.5]} />
-            <meshBasicMaterial
-              color={popupColor(p.type)}
-              transparent
-              opacity={opacity * 0.85}
-            />
-          </mesh>
+            popup={p}
+            y={y}
+            opacity={opacity}
+          />
         );
       })}
 
       {yarrBurst ? <YarrBurst burst={yarrBurst} /> : null}
     </group>
   );
+}
+
+function PopupText({
+  popup,
+  y,
+  opacity,
+}: {
+  popup: JudgmentPopup;
+  y: number;
+  opacity: number;
+}) {
+  const texture = useMemo(
+    () => createPopupTexture(popup.text, popupColor(popup.type)),
+    [popup.text, popup.type],
+  );
+
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  return (
+    <sprite
+      position={[popup.position[0], popup.position[1] + y, popup.position[2]]}
+      scale={[2.4 + popup.text.length * 0.08, 0.62, 1]}
+    >
+      <spriteMaterial
+        map={texture}
+        transparent
+        opacity={opacity}
+        depthTest={false}
+      />
+    </sprite>
+  );
+}
+
+function createPopupTexture(text: string, color: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 128;
+
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '900 44px "Press Start 2P", "DungGeunMo", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = "#17302b";
+    ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
+    ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+    ctx.fillStyle = color;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  }
+
+  const texture = new CanvasTexture(canvas);
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function YarrBurst({ burst }: { burst: { x: number; z: number; bornAt: number } }) {
