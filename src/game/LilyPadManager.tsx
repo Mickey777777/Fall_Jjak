@@ -652,6 +652,7 @@ export default function LilyPadManager({ paused }: Props) {
   function cullAndSpawn() {
     const fx = frog.current.x;
     const diff = difficultyOf(useGameStore.getState().distance);
+    const score = useGameStore.getState().score;
 
     setPads((list) => {
       let kept = list.filter((p) => p.position[0] > fx - LILY.CULL_BEHIND);
@@ -665,7 +666,9 @@ export default function LilyPadManager({ paused }: Props) {
         kept.length > 0 ? kept[kept.length - 1].position[2] : 0;
       let zigSign: 1 | -1 = lastZ < 0 ? 1 : -1;
       while (maxX < fx + LILY.SPAWN_AHEAD * (LILY.MAX_GAP + 4)) {
-        const gap = gapForDifficulty(diff, Math.random);
+        // 점수가 높아질수록 간격이 최대 1.6배까지 늘어남
+        const sparsity = Math.min(1.6, 1 + score / 1000);
+        const gap = gapForDifficulty(diff, Math.random) * sparsity;
         // 지그재그 — 다음 패드는 이전과 반대 쪽으로 향함 (가끔 직진)
         const straight = Math.random() < 0.25;
         if (!straight) zigSign = (zigSign * -1) as 1 | 1;
@@ -682,7 +685,23 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.abs(desiredDz) > maxDz) {
           lat = lastZ + Math.sign(desiredDz) * maxDz;
         }
-        const type = DEBUG_FORCE_PAD_TYPE ?? pickPadType(diff, Math.random);
+        let type = DEBUG_FORCE_PAD_TYPE ?? pickPadType(diff, Math.random);
+        // 점수가 높아질수록 basic을 특수 연잎으로 바꿈 (trap 제외)
+        if (type === "basic" && !DEBUG_FORCE_PAD_TYPE) {
+          const specialChance = Math.min(0.6, score / 1000);
+          if (Math.random() < specialChance) {
+            const specials: LilyPadData["type"][] = [
+              "rotten",
+              "slippery",
+              "moving",
+              "rotating",
+              "spring",
+              "blinking",
+            ];
+            type = specials[Math.floor(Math.random() * specials.length)];
+          }
+        }
+        
         maxX += gap;
         const newPad: LilyPadData = {
           id: ++padIdRef.current,
@@ -710,7 +729,11 @@ export default function LilyPadManager({ paused }: Props) {
 
         // 곁가지 — 안전 경로 옆에 비대칭 장식용(?) basic 연잎을 1~2개 추가
         // 게임플레이로도 이용 가능하지만 보통은 가지 않는 경로
-        const branchCount = Math.random() < 0.55 ? (Math.random() < 0.3 ? 2 : 1) : 0;
+        // 점수가 높아질수록 곁가지 확률이 줄어듦 (0.55 → 최소 0.1)
+        const branchChance = Math.max(0.15, 0.55 - score / 1000);
+        const branchCount = Math.random() < branchChance ? (Math.random() < 0.3 ? 2 : 1) : 0;
+        //                                                                       ^ 1을 2로
+        //                                                                 ^^^ 2를 1로 (안전)
         for (let b = 0; b < branchCount; b++) {
           const bx = maxX - gap * (0.4 + Math.random() * 0.5);
           const bz = lat + (-zigSign) * (1.6 + Math.random() * 2.2);
