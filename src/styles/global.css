@@ -395,6 +395,112 @@ button.ghost {
   color: var(--accent-dark);
   font-size: 16px;
 }
+.menu-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.help-button svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
+}
+.help-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 28, 30, 0.28);
+}
+.help-card {
+  width: min(560px, 92vw);
+  max-height: min(620px, 86vh);
+  overflow: auto;
+  border: 3px solid var(--accent);
+  border-radius: 18px;
+  background: var(--card-strong);
+  box-shadow: 0 24px 42px rgba(0, 0, 0, 0.28);
+  padding: 22px;
+}
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.help-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--ink);
+}
+.help-close {
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink-soft);
+  font-size: 11px;
+  box-shadow: none;
+}
+.help-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.help-tabs button {
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink-soft);
+  font-size: 13px;
+  box-shadow: none;
+}
+.help-tabs button.active {
+  background: linear-gradient(180deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  box-shadow: 0 4px 0 #2a5a18;
+}
+.help-list {
+  display: grid;
+  gap: 8px;
+}
+.help-item {
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.035);
+  padding: 12px;
+}
+.help-item-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--accent-dark);
+  margin-bottom: 6px;
+}
+.help-item-name svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
+}
+.help-item-desc {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
 .credits {
   position: absolute;
   bottom: 16px;
@@ -412,6 +518,16 @@ button.ghost {
 }
 
 /* control */
+.overlay.control {
+  background: linear-gradient(180deg, rgba(28, 44, 42, 0.5), rgba(20, 28, 30, 0.68));
+}
+.control .help-head {
+  width: 100%;
+  margin-bottom: 4px;
+}
+.control .help-head .title {
+  margin-bottom: 0;
+}
 .control .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
