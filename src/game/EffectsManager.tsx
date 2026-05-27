@@ -108,12 +108,14 @@ export default function EffectsManager({
         const age = (performance.now() - p.bornAt) / 900;
         const y = 0.95;
         const opacity = Math.max(0, 1 - age);
+        const popScale = popupPopScale(p.type, age);
         return (
           <PopupText
             key={p.id}
             popup={p}
             y={y}
             opacity={opacity}
+            popScale={popScale}
           />
         );
       })}
@@ -127,10 +129,12 @@ function PopupText({
   popup,
   y,
   opacity,
+  popScale,
 }: {
   popup: JudgmentPopup;
   y: number;
   opacity: number;
+  popScale: number;
 }) {
   const texture = useMemo(
     () => createPopupTexture(popup.text, popupColor(popup.type)),
@@ -142,7 +146,11 @@ function PopupText({
   return (
     <sprite
       position={[popup.position[0], popup.position[1] + y, popup.position[2]]}
-      scale={[2.4 + popup.text.length * 0.08, 0.62, 1]}
+      scale={[
+        (2.4 + popup.text.length * 0.08) * popScale,
+        0.62 * popScale,
+        1,
+      ]}
     >
       <spriteMaterial
         map={texture}
@@ -181,6 +189,15 @@ function createPopupTexture(text: string, color: string) {
   texture.magFilter = LinearFilter;
   texture.needsUpdate = true;
   return texture;
+}
+
+function popupPopScale(type: string, age: number) {
+  const strength = type === "Yarr" ? 0.45 : type === "Great" ? 0.22 : 0;
+  if (strength === 0 || age >= 0.32) return 1;
+
+  const t = age / 0.32;
+  const wave = Math.sin(t * Math.PI);
+  return 1 + wave * strength;
 }
 
 function YarrBurst({ burst }: { burst: { x: number; z: number; bornAt: number } }) {
