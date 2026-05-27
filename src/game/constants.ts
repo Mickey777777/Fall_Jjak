@@ -57,6 +57,8 @@ export const LILY = {
   ROTTEN_LIFETIME: 1.2,
   // 장식용(밟을 수 없는) 작은 연잎 밀도
   DECORATIVE_DENSITY: 1.4, // 한 메인 연잎당 평균 N개
+  BLINK_PERIOD: 2.5,
+  BLINK_VISIBLE_RATIO: 0.70,
 };
 
 // ──────────────────────────────────────────────

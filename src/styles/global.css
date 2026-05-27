@@ -1,4 +1,4 @@
-/* ──────────────────────────────────────────────
+﻿/* ──────────────────────────────────────────────
  * 폴 짝 — 글로벌 스타일
  * 빅 픽셀/도트 아트 분위기를 잡기 위해 픽셀 글꼴 + 부드러운 그라데이션
  * ────────────────────────────────────────────── */
@@ -254,7 +254,7 @@ body {
 }
 
 /* ──────────────────────────────────────────────
- * Overlay (메뉴/일시정지/게임오버/튜토리얼 공통)
+ * Overlay (메뉴/일시정지/게임오버/control 공통)
  * ────────────────────────────────────────────── */
 .overlay {
   position: absolute;
@@ -371,8 +371,8 @@ button.ghost {
   cursor: pointer;
 }
 
-/* 튜토리얼 */
-.tutorial .grid {
+/* control */
+.control .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
@@ -423,21 +423,15 @@ button.ghost {
   justify-content: center;
 }
 
-.tutorial .actions {
+.control .actions {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   width: 100%;
 }
 
-.tutorial .actions .primary {
+.control .actions .primary {
   grid-column: 2;
   justify-self: center;
-}
-
-.tutorial .actions .checkbox {
-  grid-column: 3;
-  justify-self: end;
-  white-space: nowrap;
 }
 
 /* 게임오버 */

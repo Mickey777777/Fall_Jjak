@@ -50,15 +50,16 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
         };
       case "slippery":
         return {
-          top: `rgb(${120 + Math.floor(rnd(1) * 22)}, ${210 + Math.floor(rnd(2) * 20)}, ${220 + Math.floor(rnd(3) * 16)})`,
-          rim: "#4ea6c2",
+          top: `rgb(${170 + Math.floor(rnd(1) * 20)}, ${235 + Math.floor(rnd(2) * 15)}, ${230 + Math.floor(rnd(3) * 16)})`,
+          rim: "#7dd3e0",       // 더 밝은 민트
           spots: false,
           shimmer: true,
         };
+
       case "moving":
         return {
-          top: "#9ec5f5",
-          rim: "#4079c7",
+          top: "#5a8fd8",       // 더 진한 블루
+          rim: "#2a4a8a",       // 더 진한 네이비
           spots: false,
           shimmer: false,
         };
@@ -125,8 +126,8 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
       else z += Math.sin(t * freq) * amp;
     }
     if (pad.type === "blinking") {
-      const cycle = (t % 1.6) / 1.6;
-      const visible = cycle < 0.55;
+      const cycle = (t % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+      const visible = cycle < LILY.BLINK_VISIBLE_RATIO;
       const s = visible ? 1 : 0.001;
       ref.current.scale.set(s, s, s);
     } else if (pad.type === "rotten" && pad.steppedAt != null) {
@@ -139,7 +140,9 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
     }
     const baseRot = pad.visualRotation ?? 0;
     if (pad.type === "rotating") {
-      ref.current.rotation.y = baseRot + Math.sin(t * 0.7) * 0.6;
+      const dir = pad.rotationDirection ?? 1;
+      ref.current.rotation.y = baseRot + t * 1.0 * dir;  // 한쪽 방향으로 계속 회전
+    
     } else {
       ref.current.rotation.y = baseRot;
     }
