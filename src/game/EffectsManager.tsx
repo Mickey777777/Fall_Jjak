@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, LinearFilter } from "three";
 import type { Mesh, MeshBasicMaterial } from "three";
@@ -136,10 +136,24 @@ function PopupText({
   opacity: number;
   popScale: number;
 }) {
+  const [fontReady, setFontReady] = useState(false);
   const texture = useMemo(
     () => createPopupTexture(popup.text, popupColor(popup.type)),
-    [popup.text, popup.type],
+    [fontReady, popup.text, popup.type],
   );
+
+  useEffect(() => {
+    if (!document.fonts) return;
+
+    let cancelled = false;
+    document.fonts.load('900 44px "Galmuri11"').then(() => {
+      if (!cancelled) setFontReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => () => texture.dispose(), [texture]);
 
@@ -170,13 +184,21 @@ function createPopupTexture(text: string, color: string) {
   const ctx = canvas.getContext("2d");
   if (ctx) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = '900 44px "Press Start 2P", "DungGeunMo", sans-serif';
+    ctx.font = '900 44px "Galmuri11", "Press Start 2P", "DungGeunMo", sans-serif';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.45)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 4;
     ctx.lineWidth = 10;
     ctx.strokeStyle = "#17302b";
     ctx.strokeText(text, canvas.width / 2, canvas.height / 2);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.lineWidth = 4;
     ctx.strokeStyle = "rgba(255, 255, 255, 0.72)";
     ctx.strokeText(text, canvas.width / 2, canvas.height / 2);

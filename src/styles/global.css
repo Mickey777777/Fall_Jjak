@@ -2,6 +2,8 @@
  * 폴 짝 — 글로벌 스타일
  * 빅 픽셀/도트 아트 분위기를 잡기 위해 픽셀 글꼴 + 부드러운 그라데이션
  * ────────────────────────────────────────────── */
+@import url("https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css");
+
 :root {
   --bg-top: #74cfee;
   --bg-bottom: #b8e5f3;
@@ -16,7 +18,7 @@
   --good: #7df2a1;
   --pink: #ff9bd1;
 
-  --font-pixel: "Press Start 2P", "DungGeunMo", "Pretendard",
+  --font-pixel: "Galmuri11", "Press Start 2P", "DungGeunMo", "Pretendard",
     -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui,
     "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
