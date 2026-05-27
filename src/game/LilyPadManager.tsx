@@ -595,13 +595,17 @@ export default function LilyPadManager({ paused }: Props) {
       rotatingShiftRef.current = dir * 0.2;
     }
     if (pad.type === "spring") {
-      // 즉시 추가 큰 점프 발사 (자동)
+      // 즉시 추가 큰 점프 발사 — 들어온 거리만큼 튀어오름
       playSpring();
+      const incomingDist = Math.hypot(
+        plan.endX - plan.startX,
+        plan.endZ - plan.startZ,
+      );
       const bigPlan = makeJumpPlan(
         lx,
         lz,
         aimDirRef.current,
-        JUMP.MAX_DISTANCE * 1.05,
+        incomingDist,                              // ← 들어온 거리 그대로
         Math.max(arcHeightRef.current, 3.5),
         useGameStore.getState().wind,
       );
