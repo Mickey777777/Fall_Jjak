@@ -110,7 +110,7 @@ export default function MainMenu() {
         </button>
         <div className="menu-actions">
           <button className="ghost" onClick={() => setPhase("control")}>
-            조작법 확인
+            조작법
           </button>
           <button className="ghost help-button" onClick={() => setHelpOpen(true)}>
             <HelpCircle aria-hidden="true" />
