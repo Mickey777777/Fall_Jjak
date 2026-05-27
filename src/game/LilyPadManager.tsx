@@ -32,6 +32,8 @@ import type {
   LilyPadData,
 } from "./types";
 import { playJudgment, playPlop, playSlurp, playSpring } from "./sound";
+// 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
+const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = "rotating";
 
 interface Props {
   paused: boolean;
@@ -84,7 +86,18 @@ export default function LilyPadManager({ paused }: Props) {
   const zoomRef = useRef(false);
   /** 카메라가 따라가는 "지면" 위치 — 착지할 때만 갱신되어 공중 비행 동안 배경이 흔들리지 않음 */
   const landedPos = useRef({ x: 0, z: 0 });
-
+  const slideRef = useRef<{
+    vx: number;
+    vz: number;
+    remaining: number;
+    duration: number;
+  } | null>(null);
+  const rotatingShiftRef = useRef(0);
+  const currentPadRef = useRef<{
+    padId: number;
+    offsetX: number;
+    offsetZ: number;
+  } | null>(null);
   // 마우스 월드 좌표 (raycast 결과)
   const cursorWorld = useRef(new Vector3());
   // raycast 유틸
@@ -208,16 +221,21 @@ export default function LilyPadManager({ paused }: Props) {
       const dist = chargeDistanceRef.current;
       const buffs = useGameStore.getState().buffs;
       const rangeBonus = buffs.find((b) => b.type === "rangeUp") ? 1.3 : 1;
+      // 회전 연잎 어긋남 적용 (보이지 않게)
+      const finalAim = aimDirRef.current + rotatingShiftRef.current;
       const plan = makeJumpPlan(
         frog.current.x,
         frog.current.z,
-        aimDirRef.current,
+        finalAim,  // ← aimDirRef.current → finalAim
         dist * rangeBonus,
         arcHeightRef.current,
         useGameStore.getState().wind,
       );
       jumpPlanRef.current = plan;
       jumpTimeRef.current = 0;
+      slideRef.current = null;
+      currentPadRef.current = null;
+      rotatingShiftRef.current = 0;  // ← 한 번 쓰고 초기화
     };
 
     const onContextMenu = (e: Event) => e.preventDefault();
@@ -295,9 +313,9 @@ export default function LilyPadManager({ paused }: Props) {
       const wind =
         next === "wind"
           ? {
-              direction: (Math.random() - 0.5) * Math.PI,
-              strength: 0.6 + Math.random() * 0.4,
-            }
+            direction: (Math.random() - 0.5) * Math.PI,
+            strength: 0.6 + Math.random() * 0.4,
+          }
           : { direction: 0, strength: 0 };
       setWeather(next, wind);
       weatherTimer.current = 0;
@@ -330,9 +348,93 @@ export default function LilyPadManager({ paused }: Props) {
         landFrog();
       }
     } else {
-      // 정지 상태: 호버 시 호흡만
-    }
+      // 1. 움직이는 연잎 따라가기
+      if (currentPadRef.current) {
+        const cp = currentPadRef.current;
+        const p = pads.find((x) => x.id === cp.padId);
+        if (p && p.type === "moving") {
+          const t = now - p.spawnTime;
+          const amp = p.amplitude ?? 1.4;
+          const freq = p.frequency ?? 0.8;
+          const offset = Math.sin(t * freq) * amp;
+          const vx = p.position[0] + (p.axis === "x" ? offset : 0);
+          const vz = p.position[2] + (p.axis === "x" ? 0 : offset);
+          frog.current.x = vx + cp.offsetX;
+          frog.current.z = vz + cp.offsetZ;
+        } else if (!p) {
+          currentPadRef.current = null;
+        }
+      }
 
+      // 2. 갱신된 위치로 fx/fz 재계산
+      const fx = frog.current.x;
+      const fz = frog.current.z;
+
+      // 3. rotten 만료 검사 (기존)
+      for (const p of pads) {
+        if (p.type !== "rotten" || p.steppedAt == null) continue;
+        const dx = p.position[0] - fx;
+        const dz = p.position[2] - fz;
+        if (Math.hypot(dx, dz) < p.radius) {
+          if (now - p.steppedAt >= LILY.ROTTEN_LIFETIME) {
+            playPlop();
+            finishRun();
+            return;
+          }
+        }
+      }
+
+      // 4. 점멸 연잎 검사 (기존)
+      for (const p of pads) {
+        if (p.type !== "blinking") continue;
+        const dx = p.position[0] - fx;
+        const dz = p.position[2] - fz;
+        if (Math.hypot(dx, dz) < p.radius) {
+          const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+          if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
+            playPlop();
+            finishRun();
+            return;
+          }
+        }
+      }
+
+      // 5. 슬라이드 (기존)
+      if (slideRef.current) {
+        const s = slideRef.current;
+        const linear = Math.max(0, s.remaining / s.duration);
+        const ratio = Math.pow(linear, 1.5);
+        const step = Math.min(s.remaining, dt);
+        frog.current.x += s.vx * step * ratio;
+        frog.current.z += s.vz * step * ratio;
+        s.remaining -= dt;
+        if (s.remaining <= 0) slideRef.current = null;
+      }
+
+      // 6. ★ 연잎 밖으로 나갔는지 검사 — 물 위에 있으면 사망
+      let onPad = false;
+      for (const p of pads) {
+        let pvx = p.position[0];
+        let pvz = p.position[2];
+        if (p.type === "moving") {
+          const t = now - p.spawnTime;
+          const amp = p.amplitude ?? 1.4;
+          const freq = p.frequency ?? 0.8;
+          const offset = Math.sin(t * freq) * amp;
+          if (p.axis === "x") pvx += offset;
+          else pvz += offset;
+        }
+        if (Math.hypot(pvx - frog.current.x, pvz - frog.current.z) < p.radius) {
+          onPad = true;
+          break;
+        }
+      }
+      if (!onPad) {
+        playPlop();
+        finishRun();
+        return;
+      }
+    }
     // 연잎/적/아이템 청소 및 보충
     cullAndSpawn();
 
@@ -352,7 +454,22 @@ export default function LilyPadManager({ paused }: Props) {
     frog.current.z = lz;
     setDistance(lx);
 
-    const { pad, dist } = nearestPad(lx, lz, pads);
+    // ★ 움직이는 연잎의 현재 시각 위치를 반영한 사본 만들기
+    const nowSec = performance.now() / 1000;
+    const padsForCollision = pads.map((p) => {
+      if (p.type !== "moving") return p;
+      const t = nowSec - p.spawnTime;
+      const amp = p.amplitude ?? 1.4;
+      const freq = p.frequency ?? 0.8;
+      const offset = Math.sin(t * freq) * amp;
+      const newPos: [number, number, number] =
+        p.axis === "x"
+          ? [p.position[0] + offset, p.position[1], p.position[2]]
+          : [p.position[0], p.position[1], p.position[2] + offset];
+      return { ...p, position: newPos };
+    });
+
+    const { pad, dist } = nearestPad(lx, lz, padsForCollision);  // ← pads → padsForCollision
     if (!pad) {
       handleFall(lx, lz);
       return;
@@ -365,8 +482,8 @@ export default function LilyPadManager({ paused }: Props) {
     // 점멸 연잎 비활성화 상태에서 밟으면 사망
     if (pad.type === "blinking") {
       const cycle =
-        ((performance.now() / 1000 - pad.spawnTime) % 1.6) / 1.6;
-      if (cycle >= 0.55) {
+        ((performance.now() / 1000 - pad.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+      if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
         handleFall(lx, lz);
         return;
       }
@@ -424,13 +541,20 @@ export default function LilyPadManager({ paused }: Props) {
       );
     }
     if (pad.type === "slippery" || useGameStore.getState().weather === "rain") {
-      // 다음 조준 방향이 무작위로 살짝 어긋남
-      aimDirRef.current += (Math.random() - 0.5) * 0.4;
-      setAim(aimDirRef.current);
+      // 점프 방향으로 살짝 미끄러짐 — 모멘텀이 남은 듯한 느낌
+      const SLIDE_DIST = 0.75;       // 총 밀려나는 거리 (연잎 반지름보다 작게)
+      const SLIDE_DURATION = 0.85;  // 미끄러지는 시간(초)
+      const initialSpeed = (2.5 * SLIDE_DIST) / SLIDE_DURATION; // ease-out 보정
+      slideRef.current = {
+        vx: Math.cos(aimDirRef.current) * initialSpeed,
+        vz: Math.sin(aimDirRef.current) * initialSpeed,
+        remaining: SLIDE_DURATION,
+        duration: SLIDE_DURATION,
+      };
     }
     if (pad.type === "rotating") {
-      aimDirRef.current += (Math.random() - 0.5) * 0.6;
-      setAim(aimDirRef.current);
+      const dir = pad.rotationDirection ?? 1;
+      rotatingShiftRef.current = dir * 0.2;
     }
     if (pad.type === "spring") {
       // 즉시 추가 큰 점프 발사 (자동)
@@ -445,6 +569,15 @@ export default function LilyPadManager({ paused }: Props) {
       );
       jumpPlanRef.current = bigPlan;
       jumpTimeRef.current = 0;
+    }
+    if (pad.type === "moving") {
+      currentPadRef.current = {
+        padId: pad.id,
+        offsetX: lx - pad.position[0],  // pad.position은 padsForCollision의 시각 위치
+        offsetZ: lz - pad.position[2],
+      };
+    } else {
+      currentPadRef.current = null;
     }
   }
 
@@ -507,7 +640,7 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.abs(desiredDz) > maxDz) {
           lat = lastZ + Math.sign(desiredDz) * maxDz;
         }
-        const type = pickPadType(diff, Math.random);
+        const type = DEBUG_FORCE_PAD_TYPE ?? pickPadType(diff, Math.random);
         maxX += gap;
         const newPad: LilyPadData = {
           id: ++padIdRef.current,
@@ -519,10 +652,15 @@ export default function LilyPadManager({ paused }: Props) {
           visualScale: 0.88 + Math.random() * 0.28,
           ...(type === "moving"
             ? {
-                amplitude: 0.8 + Math.random() * 1.2,
-                frequency: 0.4 + Math.random() * 0.6,
-                axis: (Math.random() < 0.5 ? "x" : "z") as "x" | "z",
-              }
+              amplitude: 0.8 + Math.random() * 1.2,
+              frequency: 0.4 + Math.random() * 0.6,
+              axis: (Math.random() < 0.5 ? "x" : "z") as "x" | "z",
+            }
+            : {}),
+          ...(type === "rotating"
+            ? {
+              rotationDirection: (Math.random() < 0.5 ? 1 : -1) as 1 | -1,
+            }
             : {}),
         };
         kept.push(newPad);

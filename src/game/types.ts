@@ -38,6 +38,7 @@ export interface LilyPadData {
   visualScale?: number;
   // 착지 파문 트리거
   rippleAt?: number;
+  rotationDirection?: 1 | -1;  // 1 = 반시계, -1 = 시계
 }
 
 export interface EnemyData {
