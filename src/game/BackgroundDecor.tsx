@@ -1,7 +1,14 @@
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
-import { type InstancedMesh, type Mesh, Matrix4 } from "three";
+import {
+  type Group,
+  type InstancedMesh,
+  type Mesh,
+  Matrix4,
+} from "three";
+import Tree from "./Tree";
 import { initSlots, slotHash, updateSlots } from "./slotRecycler";
+import { useGameStore } from "../store/useGameStore";
 
 interface Props {
   frogX: number;
@@ -9,24 +16,32 @@ interface Props {
 }
 
 /**
- * 멀리 보이는 둑 + 나무 + 갈대 + 꽃 + 돌 + 캔.
- * 모두 슬롯 리사이클러로 월드 좌표에 고정되어 있다.
+ * 강 양쪽 둑의 배경 장식. 모두 슬롯 리사이클러로 월드 좌표에 고정된다.
  */
 const BANK_Z = 12.5;
 
 // 각 장식의 (instance 수, 슬롯 폭, cullBehind)
-// GRASS/TREE 는 카메라 시야 끝(fog far)까지 둑이 끊겨 보이지 않도록 충분한 N 을 확보한다.
 const GRASS = { N: 80, SPACING: 1.0, CULL: 12 };
-const TREE = { N: 26, SPACING: 5.0, CULL: 3 };
+const TREE = { N: 14, SPACING: 4.5, CULL: 3 };
 const REED = { N: 28, SPACING: 2.4, CULL: 4 };
 const FLOWER = { N: 22, SPACING: 3.0, CULL: 3 };
 const PEBBLE = { N: 18, SPACING: 3.6, CULL: 3 };
 const TRASH = { N: 6, SPACING: 12.0, CULL: 1 };
-// 외곽 잔디 띠(나무 라인) 위에 깔리는 추가 장식 — 둑이 단조로워 보이지 않도록
 const OUTER_FLOWER = { N: 40, SPACING: 1.8, CULL: 3 };
 const MUSHROOM = { N: 16, SPACING: 3.6, CULL: 2 };
 
+// 인덱스 → 트리 종류 (벚꽃 3 : 사과 3 : 주황 2 : 일반 2 비율)
+function treeVariant(idx: number): "cherry" | "apple" | "orange" | "plain" {
+  const v = ((idx % 10) + 10) % 10;
+  return v < 3 ? "cherry" : v < 6 ? "apple" : v < 8 ? "orange" : "plain";
+}
+
 export default function BackgroundDecor({ frogX }: Props) {
+  // 게임 재시작마다 runId 가 +1 → hash 오프셋으로 사용해 트리 위치/모양/종류가 매번 달라짐
+  const runId = useGameStore((s) => s.runId);
+  const treeSeedOffset = runId * 13;
+  const treeVariantOffset = runId * 3;
+  const treeSlotOffset = runId * 997;
   // 슬롯 메모리
   const grassNorthSlots = useRef<number[]>(initSlots(GRASS.N, GRASS.CULL));
   const grassSouthSlots = useRef<number[]>(initSlots(GRASS.N, GRASS.CULL));
@@ -37,7 +52,6 @@ export default function BackgroundDecor({ frogX }: Props) {
   const trashSlots = useRef<number[]>(initSlots(TRASH.N, TRASH.CULL));
   const outerFlowerSlots = useRef<number[]>(initSlots(OUTER_FLOWER.N, OUTER_FLOWER.CULL));
   const mushroomSlots = useRef<number[]>(initSlots(MUSHROOM.N, MUSHROOM.CULL));
-
   // InstancedMesh refs
   const grassNorthRef = useRef<InstancedMesh>(null);
   const grassNorthDarkRef = useRef<InstancedMesh>(null);
@@ -45,11 +59,13 @@ export default function BackgroundDecor({ frogX }: Props) {
   const grassSouthDarkRef = useRef<InstancedMesh>(null);
   const dirtNorthRef = useRef<InstancedMesh>(null);
   const dirtSouthRef = useRef<InstancedMesh>(null);
-  // 외곽 잔디 띠 — 카메라 따라가는 단일 큰 평면 (슬롯 박스가 사선 시야에서 끊겨 보이는 문제 회피)
+  // 카메라 따라가는 큰 평면들 (둑 외곽 잔디, 먼 평지)
   const groundNorthRef = useRef<Mesh>(null);
   const groundSouthRef = useRef<Mesh>(null);
-  const treeTrunkRef = useRef<InstancedMesh>(null);
-  const treeLeafRef = useRef<InstancedMesh>(null);
+  const hillNorthRef = useRef<Mesh>(null);
+  const hillSouthRef = useRef<Mesh>(null);
+  const treeNorthRefs = useRef<(Group | null)[]>([]);
+  const treeSouthRefs = useRef<(Group | null)[]>([]);
   const reedRef = useRef<InstancedMesh>(null);
   const flowerPetalRef = useRef<InstancedMesh>(null);
   const flowerCenterRef = useRef<InstancedMesh>(null);
@@ -65,10 +81,12 @@ export default function BackgroundDecor({ frogX }: Props) {
   const tmp = useMemo(() => new Matrix4(), []);
 
   useFrame(() => {
-    // ⓪ 외곽 잔디 평면 — 카메라 시야 안에 항상 충분히 들어오도록 frogX 따라 이동
+    // ⓪ 카메라 따라가는 큰 배경 메시들 — frogX 스냅으로 이동
     const xSnap = Math.floor(frogX);
     if (groundNorthRef.current) groundNorthRef.current.position.x = xSnap;
     if (groundSouthRef.current) groundSouthRef.current.position.x = xSnap;
+    if (hillNorthRef.current) hillNorthRef.current.position.x = xSnap;
+    if (hillSouthRef.current) hillSouthRef.current.position.x = xSnap;
 
     // ① 잔디 둑 — 양쪽에 각각 안쪽(밝은) + 바깥쪽(진한) + 흙 단면
     const placeGrass = (
@@ -80,8 +98,7 @@ export default function BackgroundDecor({ frogX }: Props) {
     ) => {
       if (!lightMesh || !darkMesh || !dirtMesh) return;
       updateSlots(slots, frogX, GRASS.SPACING, GRASS.CULL, (i, s) => {
-        // 각 슬롯의 잔디는 매 m 마다 한 칸 — 슬롯에 따른 미세 높이 변동
-        const x = s * GRASS.SPACING; // 정수 슬롯이라 깔끔히 정렬
+        const x = s * GRASS.SPACING;
         // 안쪽(밝은) 잔디
         const innerH = 0.6 + slotHash(s, 1) * 0.4;
         tmp.makeScale(1, innerH, 1);
@@ -119,28 +136,24 @@ export default function BackgroundDecor({ frogX }: Props) {
       dirtSouthRef.current,
     );
 
-    // ② 나무 — 슬롯별 트렁크 + 잎. side 는 hash 로 결정해 양쪽에 분산
-    if (treeTrunkRef.current && treeLeafRef.current) {
-      const trunks = treeTrunkRef.current;
-      const leaves = treeLeafRef.current;
-      updateSlots(treeSlots.current, frogX, TREE.SPACING, TREE.CULL, (i, s) => {
-        const side: 1 | -1 = slotHash(s, 0) < 0.5 ? 1 : -1;
-        const x = s * TREE.SPACING + (slotHash(s, 3) - 0.5) * TREE.SPACING * 0.6;
-        const z = side * (BANK_Z + 1.5 + slotHash(s, 5) * 1.2);
-        const trunkH = 1.6 + slotHash(s, 7) * 0.8;
-        tmp.makeScale(0.6, trunkH, 0.6);
-        tmp.setPosition(x, trunkH * 0.5 - 0.2, z);
-        trunks.setMatrixAt(i, tmp);
-        const leafH = 1.2 + slotHash(s, 11) * 0.4;
-        tmp.makeScale(1.7, leafH, 1.7);
-        tmp.setPosition(x, trunkH + leafH * 0.5 - 0.2, z);
-        leaves.setMatrixAt(i, tmp);
-      });
-      trunks.count = TREE.N;
-      leaves.count = TREE.N;
-      trunks.instanceMatrix.needsUpdate = true;
-      leaves.instanceMatrix.needsUpdate = true;
-    }
+    // ② 나무 — 양쪽 둑에 배치. 열매가 -X 면에만 그려지므로 회전 0 고정(카메라를 향함)
+    updateSlots(treeSlots.current, frogX, TREE.SPACING, TREE.CULL, (i, s) => {
+      const sh = s + treeSlotOffset;
+      const xN = s * TREE.SPACING + (slotHash(sh, 3) - 0.5) * TREE.SPACING * 0.5;
+      const zN = BANK_Z + 1.5 + slotHash(sh, 5) * 1.2;
+      const gN = treeNorthRefs.current[i];
+      if (gN) {
+        gN.position.set(xN, -0.2, zN);
+        gN.rotation.y = 0;
+      }
+      const xS = s * TREE.SPACING + (slotHash(sh, 4) - 0.5) * TREE.SPACING * 0.5;
+      const zS = -(BANK_Z + 1.5 + slotHash(sh, 6) * 1.2);
+      const gS = treeSouthRefs.current[i];
+      if (gS) {
+        gS.position.set(xS, -0.2, zS);
+        gS.rotation.y = 0;
+      }
+    });
 
     // ③ 갈대
     if (reedRef.current) {
@@ -384,26 +397,56 @@ export default function BackgroundDecor({ frogX }: Props) {
         <meshStandardMaterial color={"#92bf3e"} roughness={1} />
       </mesh>
 
-      {/* 나무 줄기 */}
-      <instancedMesh
-        ref={treeTrunkRef}
-        args={[undefined, undefined, TREE.N]}
-        castShadow
+      {/* 멀리 평지 — 둑 외곽보다 살짝 어두운 잔디 지면 */}
+      <mesh
+        ref={hillNorthRef}
+        position={[0, -0.3, BANK_Z + 13]}
+        receiveShadow
         frustumCulled={false}
       >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={"#6e4a26"} roughness={1} />
-      </instancedMesh>
-      {/* 나무 잎 */}
-      <instancedMesh
-        ref={treeLeafRef}
-        args={[undefined, undefined, TREE.N]}
-        castShadow
+        <boxGeometry args={[320, 0.4, 18]} />
+        <meshStandardMaterial color={"#7eb045"} roughness={1} />
+      </mesh>
+      <mesh
+        ref={hillSouthRef}
+        position={[0, -0.3, -(BANK_Z + 13)]}
+        receiveShadow
         frustumCulled={false}
       >
-        <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={"#5fbc52"} roughness={1} />
-      </instancedMesh>
+        <boxGeometry args={[320, 0.4, 18]} />
+        <meshStandardMaterial color={"#7eb045"} roughness={1} />
+      </mesh>
+
+      {/* 나무 — 북쪽 둑. seed/variant 에 runId 오프셋 → 게임마다 다른 모양·종류 */}
+      {Array.from({ length: TREE.N }).map((_, i) => (
+        <group
+          key={`tree-n-${i}`}
+          ref={(g) => {
+            treeNorthRefs.current[i] = g;
+          }}
+        >
+          <Tree
+            seed={(i + treeSeedOffset) * 7 + 13}
+            variant={treeVariant(i + treeVariantOffset)}
+            detailCount={2}
+          />
+        </group>
+      ))}
+      {/* 나무 — 남쪽 둑. 북쪽과 다른 오프셋으로 종류·모양 분산 */}
+      {Array.from({ length: TREE.N }).map((_, i) => (
+        <group
+          key={`tree-s-${i}`}
+          ref={(g) => {
+            treeSouthRefs.current[i] = g;
+          }}
+        >
+          <Tree
+            seed={(i + treeSeedOffset + 100) * 7 + 13}
+            variant={treeVariant(i + treeVariantOffset + 5)}
+            detailCount={2}
+          />
+        </group>
+      ))}
 
       {/* 갈대 */}
       <instancedMesh
