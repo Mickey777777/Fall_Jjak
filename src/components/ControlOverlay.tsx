@@ -7,36 +7,41 @@ export default function ControlOverlay() {
   return (
     <div className="overlay control">
       <div className="card wide">
-        <div className="title">조작법</div>
+        <div className="help-head">
+          <div className="title">조작법</div>
+          <button className="help-close" onClick={() => setPhase("menu")}>
+            닫기
+          </button>
+        </div>
         <div className="grid">
           <div className="t-item">
             <div className="t-key">
               <MousePointer2 />
             </div>
             <div>
-              <b>마우스 호버</b>
-              <div>커서를 움직여 점프할 방향을 조준.</div>
+              <b>마우스 커서</b>
+              <div>커서를 움직여 점프할 방향을 조절.</div>
             </div>
           </div>
           <div className="t-item">
             <div className="t-key">RMB</div>
             <div>
-              <b>우클릭 꾹 + 드래그</b>
-              <div>드래그한 거리만큼 점프 거리가 증가.</div>
+              <b>우클릭 유지 + 드래그</b>
+              <div>드래그한 거리만큼 점프 거리 증가.</div>
             </div>
           </div>
           <div className="t-item">
-            <div className="t-key">RMB↑</div>
+            <div className="t-key">RMB</div>
             <div>
-              <b>우클릭 떼기</b>
-              <div>설정한 방향과 거리로 점프 발사!</div>
+              <b>우클릭 놓기</b>
+              <div>설정한 방향과 거리로 점프.</div>
             </div>
           </div>
           <div className="t-item">
             <div className="t-key">A / S</div>
             <div>
               <b>궤적 조절</b>
-              <div>A로 높게 발사! S로 낮게 발사!</div>
+              <div>A로 높게, S로 낮게 점프.</div>
             </div>
           </div>
           <div className="t-item">
@@ -50,21 +55,9 @@ export default function ControlOverlay() {
             <div className="t-key">ESC</div>
             <div>
               <b>일시정지</b>
-              <div>Stop, Wait a minute!</div>
+              <div>게임을 멈춤.</div>
             </div>
           </div>
-        </div>
-
-        <div className="judgments">
-          <span style={{ color: "#F59E0B" }}>● Yarr! +30</span>
-          <span style={{ color: "#22C55E" }}>● Great +20</span>
-          <span style={{ color: "#9CA3AF" }}>● Not bad.. +10</span>
-        </div>
-
-        <div className="actions">
-          <button className="primary" onClick={() => setPhase("menu")}>
-            확인
-          </button>
         </div>
       </div>
     </div>

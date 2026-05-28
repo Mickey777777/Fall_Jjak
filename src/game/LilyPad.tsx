@@ -111,6 +111,7 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
 
   const radius = pad.radius * (pad.visualScale ?? 1) * 0.95;
   const padThickness = 0.14;
+  const decoScale = pad.radius / LILY.RADIUS;
 
   useFrame(() => {
     if (!ref.current) return;
@@ -125,7 +126,7 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
       if (pad.axis === "x") x += Math.sin(t * freq) * amp;
       else z += Math.sin(t * freq) * amp;
     }
-    if (pad.type === "blinking") {
+    if (pad.type === "blinking" && pad.steppedAt == null) {
       const cycle = (t % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
       const visible = cycle < LILY.BLINK_VISIBLE_RATIO;
       const s = visible ? 1 : 0.001;
@@ -256,13 +257,11 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
       {/* 삭은 연잎 반점 */}
       {visual.spots && (
         <>
-          <mesh position={[radius * 0.3, padThickness * 0.78, 0.1]}>
-            <boxGeometry args={[0.18, 0.03, 0.18]} />
-            <meshStandardMaterial color={"#5a4523"} />
+          <mesh position={[radius * 0.3, padThickness * 0.78, 0.1 * decoScale]}>
+            <boxGeometry args={[0.18 * decoScale, 0.03 * decoScale, 0.18 * decoScale]} />
           </mesh>
-          <mesh position={[-radius * 0.2, padThickness * 0.78, -0.25]}>
-            <boxGeometry args={[0.14, 0.03, 0.14]} />
-            <meshStandardMaterial color={"#5a4523"} />
+          <mesh position={[-radius * 0.2, padThickness * 0.78, -0.25 * decoScale]}>
+            <boxGeometry args={[0.14 * decoScale, 0.03 * decoScale, 0.14 * decoScale]} />
           </mesh>
         </>
       )}
@@ -270,11 +269,9 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
       {/* 미끄러운 반짝임 */}
       {visual.shimmer && (
         <mesh position={[radius * 0.18, padThickness * 0.8, -radius * 0.18]}>
-          <boxGeometry args={[0.16, 0.02, 0.1]} />
-          <meshStandardMaterial color={"#ffffff"} emissive={"#d4f4ff"} emissiveIntensity={0.4} />
+          <boxGeometry args={[0.16 * decoScale, 0.02 * decoScale, 0.1 * decoScale]} />
         </mesh>
       )}
-
       {/* Yarr 중앙 표시 — 함정 제외 */}
       {pad.type !== "trap" && (
         <mesh position={[0, padThickness * 0.75 + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -293,14 +290,21 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
           {[0, 1, 2, 3, 4, 5].map((i) => {
             const a = (i / 6) * Math.PI * 2;
             return (
-              <mesh key={i} position={[Math.cos(a) * 0.32, 0.18, Math.sin(a) * 0.32]}>
-                <coneGeometry args={[0.1, 0.42, 4]} />
+              <mesh
+                key={i}
+                position={[
+                  Math.cos(a) * 0.32 * decoScale,
+                  0.18 * decoScale,
+                  Math.sin(a) * 0.32 * decoScale,
+                ]}
+              >
+                <coneGeometry args={[0.1 * decoScale, 0.42 * decoScale, 4]} />
                 <meshStandardMaterial color="#5a0a14" />
               </mesh>
             );
           })}
-          <mesh position={[0, 0.05, 0]}>
-            <boxGeometry args={[0.42, 0.05, 0.42]} />
+          <mesh position={[0, 0.05 * decoScale, 0]}>
+            <boxGeometry args={[0.42 * decoScale, 0.05 * decoScale, 0.42 * decoScale]} />
             <meshStandardMaterial color={"#3a0a14"} />
           </mesh>
         </group>
@@ -310,11 +314,13 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
       {pad.type === "spring" && (
         <>
           <mesh position={[0, padThickness * 1.1, 0]}>
-            <cylinderGeometry args={[radius * 0.7, radius * 0.85, 0.18, 8]} />
+            <cylinderGeometry args={[radius * 0.7, radius * 0.85, 0.18 * decoScale, 8]} />
+            {/*                                                   ^^^^^^^^^^^^^^^^ 추가 */}
             <meshStandardMaterial color={"#a8e833"} roughness={1} />
           </mesh>
           <mesh position={[0, padThickness * 1.3, 0]}>
-            <torusGeometry args={[0.3, 0.06, 5, 8]} />
+            <torusGeometry args={[0.3 * decoScale, 0.06 * decoScale, 5, 8]} />
+            {/*                  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^ 추가 */}
             <meshStandardMaterial color={"#ffffff"} emissive={"#ff9ada"} emissiveIntensity={0.3} />
           </mesh>
         </>
@@ -323,7 +329,8 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
       {/* 회전 연잎 잎맥 패턴 — 중앙 작은 큐브 */}
       {pad.type === "rotating" && (
         <mesh position={[0, padThickness * 0.85, 0]} rotation={[0, Math.PI / 4, 0]}>
-          <boxGeometry args={[0.6, 0.04, 0.12]} />
+          <boxGeometry args={[0.6 * decoScale, 0.04 * decoScale, 0.12 * decoScale]} />
+          {/*                  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 추가 */}
           <meshStandardMaterial color={"#8a6020"} roughness={1} />
         </mesh>
       )}

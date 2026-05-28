@@ -1,7 +1,9 @@
-﻿/* ──────────────────────────────────────────────
+/* ──────────────────────────────────────────────
  * 폴 짝 — 글로벌 스타일
  * 빅 픽셀/도트 아트 분위기를 잡기 위해 픽셀 글꼴 + 부드러운 그라데이션
  * ────────────────────────────────────────────── */
+@import url("https://cdn.jsdelivr.net/npm/galmuri@latest/dist/galmuri.css");
+
 :root {
   --bg-top: #74cfee;
   --bg-bottom: #b8e5f3;
@@ -16,7 +18,7 @@
   --good: #7df2a1;
   --pink: #ff9bd1;
 
-  --font-pixel: "Press Start 2P", "DungGeunMo", "Pretendard",
+  --font-pixel: "Galmuri11", "Press Start 2P", "DungGeunMo", "Pretendard",
     -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", system-ui,
     "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
@@ -99,12 +101,14 @@ body {
 /* 우상단 콤보 칩 */
 .combo-chip {
   position: absolute;
-  top: 14px;
-  right: 18px;
+  top: 62px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
+  animation: comboPop 0.28s cubic-bezier(0.16, 1.35, 0.42, 1) both;
 }
 .combo-num {
   font-size: 38px;
@@ -117,6 +121,18 @@ body {
   font-weight: 800;
   color: #ffffff;
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+@keyframes comboPop {
+  0% {
+    transform: translateX(-50%) scale(0.82);
+  }
+  58% {
+    transform: translateX(-50%) scale(1.18);
+  }
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
 }
 
 /* 좌측 하단 날씨 칩 */
@@ -198,32 +214,6 @@ body {
   letter-spacing: 0.05em;
 }
 
-.hud-center {
-  position: absolute;
-  top: 80px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 100%;
-  text-align: center;
-  pointer-events: none;
-}
-.judgment {
-  display: inline-block;
-  font-size: 44px;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  animation: judgmentPop 0.7s ease-out;
-  text-shadow:
-    0 0 12px rgba(255, 255, 200, 0.5),
-    0 4px 0 rgba(0, 0, 0, 0.35);
-}
-@keyframes judgmentPop {
-  0% { transform: scale(0.6); opacity: 0; }
-  20% { transform: scale(1.25); opacity: 1; }
-  60% { transform: scale(1.0); opacity: 1; }
-  100% { transform: scale(0.95); opacity: 0; }
-}
-
 .mute-btn {
   position: absolute;
   top: 16px;
@@ -290,11 +280,51 @@ body {
   align-items: center;
 }
 
+.card.big.new-record {
+  position: relative;
+  isolation: isolate;
+  border-color: var(--gold);
+  animation: recordCardPop 0.42s cubic-bezier(0.16, 1.25, 0.42, 1) both;
+}
+
+.card.big.new-record::before {
+  content: "";
+  position: absolute;
+  inset: -28px;
+  z-index: -1;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle, rgba(255, 216, 77, 0.58) 0%, rgba(255, 216, 77, 0.18) 48%, rgba(255, 216, 77, 0) 72%);
+  filter: blur(4px);
+  opacity: 0;
+  animation: recordGlow 0.82s ease-out both;
+  pointer-events: none;
+}
+
 .card .title {
   font-size: 24px;
   font-weight: 800;
   color: var(--ink);
   margin-bottom: 6px;
+}
+
+.record-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #c98d00;
+  text-shadow: 0 2px 0 rgba(255, 255, 255, 0.72);
+  animation: recordTitlePulse 0.68s ease-out both;
+}
+
+.record-title svg {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  fill: #ffd84d;
+  stroke: #a66d00;
+  stroke-width: 2.4;
 }
 
 button {
@@ -355,6 +385,112 @@ button.ghost {
   color: var(--accent-dark);
   font-size: 16px;
 }
+.menu-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.help-button svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
+}
+.help-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(20, 28, 30, 0.28);
+}
+.help-card {
+  width: min(560px, 92vw);
+  max-height: min(620px, 86vh);
+  overflow: auto;
+  border: 3px solid var(--accent);
+  border-radius: 18px;
+  background: var(--card-strong);
+  box-shadow: 0 24px 42px rgba(0, 0, 0, 0.28);
+  padding: 22px;
+}
+.help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.help-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--ink);
+}
+.help-close {
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink-soft);
+  font-size: 11px;
+  box-shadow: none;
+}
+.help-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.help-tabs button {
+  padding: 11px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink-soft);
+  font-size: 13px;
+  box-shadow: none;
+}
+.help-tabs button.active {
+  background: linear-gradient(180deg, var(--accent), var(--accent-dark));
+  color: #fff;
+  box-shadow: 0 4px 0 #2a5a18;
+}
+.help-list {
+  display: grid;
+  gap: 8px;
+}
+.help-item {
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.035);
+  padding: 12px;
+}
+.help-item-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--accent-dark);
+  margin-bottom: 6px;
+}
+.help-item-name svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  stroke-width: 2.6;
+}
+.help-item-desc {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
 .credits {
   position: absolute;
   bottom: 16px;
@@ -372,6 +508,16 @@ button.ghost {
 }
 
 /* control */
+.overlay.control {
+  background: linear-gradient(180deg, rgba(28, 44, 42, 0.5), rgba(20, 28, 30, 0.68));
+}
+.control .help-head {
+  width: 100%;
+  margin-bottom: 4px;
+}
+.control .help-head .title {
+  margin-bottom: 0;
+}
 .control .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -439,7 +585,13 @@ button.ghost {
   font-size: 56px;
   font-weight: 900;
   color: var(--accent-dark);
-  margin: 8px 0 20px;
+  margin: 8px 0 6px;
+}
+.gameover .best-score {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(120, 132, 128, 0.72);
+  margin-bottom: 16px;
 }
 .gameover .stats {
   display: grid;
@@ -462,6 +614,54 @@ button.ghost {
   font-weight: 800;
   color: var(--ink);
   margin-top: 4px;
+}
+.stat-value.record-value {
+  color: var(--accent-dark);
+  text-shadow:
+    0 1px 0 #fff8bf,
+    0 0 10px rgba(255, 216, 77, 0.55);
+}
+
+@keyframes recordCardPop {
+  0% {
+    opacity: 0;
+    transform: translateY(16px) scale(0.88);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.035);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes recordTitlePulse {
+  0% {
+    transform: scale(0.92);
+  }
+  38% {
+    transform: scale(1.14);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes recordGlow {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0.62;
+    transform: scale(1);
+  }
 }
 
 /* 일시정지 */

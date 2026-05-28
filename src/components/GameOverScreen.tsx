@@ -1,3 +1,4 @@
+import { Trophy } from "lucide-react";
 import { useGameStore } from "../store/useGameStore";
 
 export default function GameOverScreen() {
@@ -14,16 +15,25 @@ export default function GameOverScreen() {
 
   return (
     <div className="overlay gameover">
-      <div className="card big">
-        <div className="title">{isNew ? "🏆 신기록!" : "Game Over"}</div>
+      <div className={`card big ${isNew ? "new-record" : ""}`}>
+        <div className="title">
+          {isNew ? (
+            <span className="record-title">
+              <Trophy aria-hidden="true" />
+              New record!
+            </span>
+          ) : (
+            "Game Over"
+          )}
+        </div>
         <div className="big-score">{score.toLocaleString()}</div>
+        <div className="best-score">Best: {highScore.toLocaleString()}</div>
 
         <div className="stats">
           <Stat label="이동 거리" value={`${distance.toFixed(1)} m`} />
           <Stat label="밟은 연잎" value={`${padsLanded}`} />
           <Stat label="최고 콤보" value={`${maxCombo}`} />
           <Stat label="잡아먹은 파리" value={`${fliesEaten}`} />
-          <Stat label="최고 점수" value={highScore.toLocaleString()} />
         </div>
 
         <div className="actions">
@@ -51,11 +61,21 @@ export default function GameOverScreen() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
   return (
     <div className="stat">
       <div className="stat-label">{label}</div>
-      <div className="stat-value">{value}</div>
+      <div className={`stat-value ${highlight ? "record-value" : ""}`}>
+        {value}
+      </div>
     </div>
   );
 }

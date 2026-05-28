@@ -424,6 +424,7 @@ export default function LilyPadManager({ paused }: Props) {
       // 4. 점멸 연잎 검사 (기존)
       for (const p of pads) {
         if (p.type !== "blinking") continue;
+        if (p.steppedAt != null) continue;
         const dx = p.position[0] - fx;
         const dz = p.position[2] - fz;
         if (Math.hypot(dx, dz) < p.radius) {
@@ -517,7 +518,7 @@ export default function LilyPadManager({ paused }: Props) {
       return;
     }
     // 점멸 연잎 비활성화 상태에서 밟으면 사망
-    if (pad.type === "blinking") {
+    if (pad.type === "blinking" && pad.steppedAt == null) {
       const cycle =
         ((performance.now() / 1000 - pad.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
       if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
@@ -578,6 +579,16 @@ export default function LilyPadManager({ paused }: Props) {
         ),
       );
     }
+    // ★ 점멸 연잎도 밟으면 안정화 (steppedAt 기록)
+    if (pad.type === "blinking") {
+      setPads((list) =>
+        list.map((p) =>
+          p.id === pad.id
+            ? { ...p, steppedAt: performance.now() / 1000 }
+            : p,
+        ),
+      );
+    }
     if (pad.type === "slippery" || useGameStore.getState().weather === "rain") {
       // 점프 방향으로 살짝 미끄러짐 — 모멘텀이 남은 듯한 느낌
       const SLIDE_DIST = 0.75;       // 총 밀려나는 거리 (연잎 반지름보다 작게)
@@ -592,7 +603,7 @@ export default function LilyPadManager({ paused }: Props) {
     }
     if (pad.type === "rotating") {
       const dir = pad.rotationDirection ?? 1;
-      rotatingShiftRef.current = dir * 0.2;
+      rotatingShiftRef.current = -dir * 0.1;
     }
     if (pad.type === "spring") {
       // 즉시 추가 큰 점프 발사 — 들어온 거리만큼 튀어오름
@@ -652,6 +663,7 @@ export default function LilyPadManager({ paused }: Props) {
   function cullAndSpawn() {
     const fx = frog.current.x;
     const diff = difficultyOf(useGameStore.getState().distance);
+    const score = useGameStore.getState().score;
 
     setPads((list) => {
       let kept = list.filter((p) => p.position[0] > fx - LILY.CULL_BEHIND);
@@ -665,7 +677,10 @@ export default function LilyPadManager({ paused }: Props) {
         kept.length > 0 ? kept[kept.length - 1].position[2] : 0;
       let zigSign: 1 | -1 = lastZ < 0 ? 1 : -1;
       while (maxX < fx + LILY.SPAWN_AHEAD * (LILY.MAX_GAP + 4)) {
-        const gap = gapForDifficulty(diff, Math.random);
+        // 점수가 높아질수록 간격이 최대 1.6배까지 늘어남
+        const sparsity = Math.min(1.6, 1 + score / 1000);
+        const sizeFactor = Math.max(0.75, 1.2 - score / 1200);
+        const gap = gapForDifficulty(diff, Math.random) * sparsity;
         // 지그재그 — 다음 패드는 이전과 반대 쪽으로 향함 (가끔 직진)
         const straight = Math.random() < 0.25;
         if (!straight) zigSign = (zigSign * -1) as 1 | 1;
@@ -682,13 +697,34 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.abs(desiredDz) > maxDz) {
           lat = lastZ + Math.sign(desiredDz) * maxDz;
         }
-        const type = DEBUG_FORCE_PAD_TYPE ?? pickPadType(diff, Math.random);
+        let type = DEBUG_FORCE_PAD_TYPE ?? pickPadType(diff, Math.random);
+        // 점수가 높아질수록 basic을 특수 연잎으로 바꿈 (trap 제외)
+        if (type === "basic" && !DEBUG_FORCE_PAD_TYPE) {
+          const specialChance = Math.min(0.5, score / 1500);
+          if (Math.random() < specialChance) {
+            const specials: LilyPadData["type"][] = [
+              "rotten",
+              "slippery",
+              "moving",
+              "rotating",
+              "spring",
+              "blinking",
+            ];
+            type = specials[Math.floor(Math.random() * specials.length)];
+          }
+        }
+        
+        const padSizeFactor = type === "basic"
+          ? sizeFactor                                  // 일반: 기본 공식
+          : Math.max(0.9, 1.2 - score / 1400);          // 특수: 완만한 공식
+
+
         maxX += gap;
         const newPad: LilyPadData = {
           id: ++padIdRef.current,
           type,
           position: [maxX, WORLD.PAD_TOP_Y, lat],
-          radius: LILY.RADIUS,
+          radius: LILY.RADIUS * padSizeFactor, 
           spawnTime: performance.now() / 1000,
           visualRotation: (Math.random() - 0.5) * 0.7,
           visualScale: 0.88 + Math.random() * 0.28,
@@ -708,9 +744,11 @@ export default function LilyPadManager({ paused }: Props) {
         kept.push(newPad);
         lastZ = lat;
 
-        // 곁가지 — 안전 경로 옆에 비대칭 장식용(?) basic 연잎을 1~2개 추가
-        // 게임플레이로도 이용 가능하지만 보통은 가지 않는 경로
-        const branchCount = Math.random() < 0.55 ? (Math.random() < 0.3 ? 2 : 1) : 0;
+        
+        const branchChance = Math.max(0.25, 0.55 - score / 1500);
+        const branchCount = Math.random() < branchChance ? (Math.random() < 0.4 ? 2 : 1) : 0;
+        //                                                                       
+        //                                                                 
         for (let b = 0; b < branchCount; b++) {
           const bx = maxX - gap * (0.4 + Math.random() * 0.5);
           const bz = lat + (-zigSign) * (1.6 + Math.random() * 2.2);
@@ -719,7 +757,7 @@ export default function LilyPadManager({ paused }: Props) {
             id: ++padIdRef.current,
             type: "basic",
             position: [bx, WORLD.PAD_TOP_Y, bz],
-            radius: LILY.RADIUS * (0.7 + Math.random() * 0.3),
+            radius: LILY.RADIUS * sizeFactor * (0.7 + Math.random() * 0.3),
             spawnTime: performance.now() / 1000,
             visualRotation: (Math.random() - 0.5) * 0.7,
             visualScale: 0.75 + Math.random() * 0.3,
@@ -861,24 +899,51 @@ function initialPads(padIdRef: { current: number }): LilyPadData[] {
     id: ++padIdRef.current,
     type: "basic",
     position: [0, WORLD.PAD_TOP_Y, 0],
-    radius: LILY.RADIUS,
+    radius: LILY.RADIUS * 1.2,
     spawnTime: 0,
     visualRotation: 0,
     visualScale: 1.0,
   });
   let x = 0;
+  let lastZ = 0;
+  let zigSign: 1 | -1 = 1;
   for (let i = 0; i < 10; i++) {
-    x += 2.6 + Math.random() * 1.6;
-    const lat = (Math.random() - 0.5) * 4.0;
+    const gap = gapForDifficulty(0, Math.random);
+    x += gap;
+    const straight = Math.random() < 0.25;
+    if (!straight) zigSign = (zigSign * -1) as 1 | -1;
+    const lateralBase = lateralForDifficulty(0, Math.random);
+    const lat = straight
+      ? lastZ + (Math.random() - 0.5) * 1.2
+      : zigSign * Math.abs(lateralBase);
     out.push({
       id: ++padIdRef.current,
       type: "basic",
       position: [x, WORLD.PAD_TOP_Y, lat],
-      radius: LILY.RADIUS,
+      radius: LILY.RADIUS * 1.2,
       spawnTime: 0,
       visualRotation: (Math.random() - 0.5) * 0.7,
       visualScale: 0.85 + Math.random() * 0.3,
     });
+
+    // ★ 곁가지 — cullAndSpawn과 동일한 로직 (score=0 기준이라 55%)
+    const branchCount = Math.random() < 0.55 ? (Math.random() < 0.3 ? 2 : 1) : 0;
+    for (let b = 0; b < branchCount; b++) {
+      const bx = x - gap * (0.4 + Math.random() * 0.5);
+      const bz = lat + (-zigSign) * (1.6 + Math.random() * 2.2);
+      if (Math.abs(bz) > LILY.MAX_LATERAL * 1.4) continue;
+      out.push({
+        id: ++padIdRef.current,
+        type: "basic",
+        position: [bx, WORLD.PAD_TOP_Y, bz],
+        radius: LILY.RADIUS * 1.2 * (0.7 + Math.random() * 0.3),
+        spawnTime: 0,
+        visualRotation: (Math.random() - 0.5) * 0.7,
+        visualScale: 0.75 + Math.random() * 0.3,
+      });
+    }
+
+    lastZ = lat;
   }
   return out;
 }

@@ -1,8 +1,10 @@
-import { useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
+import { CanvasTexture, LinearFilter } from "three";
 import type { Mesh, MeshBasicMaterial } from "three";
 import { useGameStore } from "../store/useGameStore";
 import { JUMP } from "./constants";
+import type { JudgmentPopup } from "./types";
 
 interface Props {
   frogX: number;
@@ -104,27 +106,123 @@ export default function EffectsManager({
       {/* 판정 popup */}
       {popups.map((p) => {
         const age = (performance.now() - p.bornAt) / 900;
-        const y = 0.5 + age * 1.6;
+        const y = 0.95;
         const opacity = Math.max(0, 1 - age);
+        const popScale = popupPopScale(p.type, age);
         return (
-          <mesh
+          <PopupText
             key={p.id}
-            position={[p.position[0], p.position[1] + y, p.position[2]]}
-            rotation={[-0.5, 0, 0]}
-          >
-            <planeGeometry args={[2.5 + p.text.length * 0.05, 0.5]} />
-            <meshBasicMaterial
-              color={popupColor(p.type)}
-              transparent
-              opacity={opacity * 0.85}
-            />
-          </mesh>
+            popup={p}
+            y={y}
+            opacity={opacity}
+            popScale={popScale}
+          />
         );
       })}
 
       {yarrBurst ? <YarrBurst burst={yarrBurst} /> : null}
     </group>
   );
+}
+
+function PopupText({
+  popup,
+  y,
+  opacity,
+  popScale,
+}: {
+  popup: JudgmentPopup;
+  y: number;
+  opacity: number;
+  popScale: number;
+}) {
+  const [fontReady, setFontReady] = useState(false);
+  const texture = useMemo(
+    () => createPopupTexture(popup.text, popupColor(popup.type)),
+    [fontReady, popup.text, popup.type],
+  );
+
+  useEffect(() => {
+    if (!document.fonts) return;
+
+    let cancelled = false;
+    document.fonts.load('900 44px "Galmuri11"').then(() => {
+      if (!cancelled) setFontReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => () => texture.dispose(), [texture]);
+
+  return (
+    <sprite
+      position={[popup.position[0], popup.position[1] + y, popup.position[2]]}
+      scale={[
+        (2.4 + popup.text.length * 0.08) * popScale,
+        0.62 * popScale,
+        1,
+      ]}
+    >
+      <spriteMaterial
+        map={texture}
+        transparent
+        opacity={opacity}
+        depthTest={false}
+      />
+    </sprite>
+  );
+}
+
+function createPopupTexture(text: string, color: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 128;
+
+  const ctx = canvas.getContext("2d");
+  if (ctx) {
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '900 44px "Galmuri11", "Press Start 2P", "DungGeunMo", sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineJoin = "round";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.42)";
+    ctx.shadowBlur = 9;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 4;
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = "rgba(11, 29, 25, 0.95)";
+    ctx.strokeText(text, cx, cy);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.strokeText(text, cx, cy);
+    ctx.fillStyle = color;
+    ctx.fillText(text, cx, cy);
+  }
+
+  const texture = new CanvasTexture(canvas);
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function popupPopScale(type: string, age: number) {
+  const strength = type === "Yarr" ? 0.45 : type === "Great" ? 0.22 : 0;
+  if (strength === 0 || age >= 0.32) return 1;
+
+  const t = age / 0.32;
+  const wave = Math.sin(t * Math.PI);
+  return 1 + wave * strength;
 }
 
 function YarrBurst({ burst }: { burst: { x: number; z: number; bornAt: number } }) {
