@@ -24,6 +24,13 @@ const SPARKLE = { N: 30, SPACING: 1.6, CULL: 6 };
 const DECO_PAD = { N: 60, SPACING: 1.0, CULL: 14 };
 const SEAWEED = { N: 24, SPACING: 2.2, CULL: 4 };
 
+// 먹구름 — 맵에 고정 스폰, Z 축으로 천천히 이동하며 연잎을 가림
+const DARK_CLOUD_N = 2;
+const CLOUD_Z_RANGE = 15;
+const CLOUD_SPEED = 1.2;
+const CLOUD_X_SPREAD = 22;
+
+
 /**
  * 월드 고정 위치의 수면 장식 + 날씨 효과.
  *
@@ -31,7 +38,8 @@ const SEAWEED = { N: 24, SPACING: 2.2, CULL: 4 };
  * 카메라가 그것을 통과하는 식으로 보인다 (배경이 따라다니지 않음).
  */
 export default function WeatherSystem({ frogX, frogZ }: Props) {
-  const weather = useGameStore((s) => s.weather);
+  useGameStore((s) => s.weather);
+  const weather = "cloud" as import("./types").WeatherType; // 테스트용
   const wind = useGameStore((s) => s.wind);
   const { scene } = useThree();
 
@@ -55,6 +63,26 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
   const decoPadLightRef = useRef<InstancedMesh>(null);
   const decoPadDarkRef = useRef<InstancedMesh>(null);
   const seaweedRef = useRef<InstancedMesh>(null);
+  const cloudBaseRef = useRef<InstancedMesh>(null);
+  const cloudMidRef = useRef<InstancedMesh>(null);
+  const cloudTopRef = useRef<InstancedMesh>(null);
+  const activeCloudCount = useRef(DARK_CLOUD_N);
+  const prevWeather = useRef("");
+
+  // 먹구름 상태: x, z(드리프트), zDir, h/w/d(크기)
+  const darkCloudData = useRef(
+    Array.from({ length: DARK_CLOUD_N }, (_, i) => {
+      const dir = Math.random() > 0.5 ? 1 : -1;
+      return {
+        x: 6 + i * CLOUD_X_SPREAD + Math.random() * 8,
+        z: -dir * (7 + Math.random() * 5),
+        zDir: dir,
+        h: 4.0 + Math.random() * 2.0,
+        w: 11 + Math.random() * 8,
+        d: 5 + Math.random() * 3,
+      };
+    }),
+  );
 
   const tmp = useMemo(() => new Matrix4(), []);
 
@@ -218,15 +246,54 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
     pos.needsUpdate = true;
   });
 
-  const cloudPositions = useMemo(
-    () =>
-      Array.from({ length: 4 }).map((_, i) => ({
-        offsetX: (i - 2) * 22 + Math.random() * 6,
-        offsetZ: (Math.random() - 0.5) * 24,
-        height: 8 + Math.random() * 2,
-      })),
-    [],
-  );
+  // 먹구름 이동 — 비/바람과 같은 메커니즘: 개구리 기준으로 너무 멀면 근처에 리스폰
+  useFrame((_, dt) => {
+    const base = cloudBaseRef.current;
+    const mid = cloudMidRef.current;
+    const top = cloudTopRef.current;
+    if (!base || !mid || !top) return;
+    if (weather !== prevWeather.current) {
+      if (weather === "cloud") activeCloudCount.current = Math.random() < 0.5 ? 1 : 2;
+      prevWeather.current = weather;
+    }
+    if (weather !== "cloud") {
+      base.count = mid.count = top.count = 0;
+      return;
+    }
+    const clouds = darkCloudData.current;
+    const spreadX = DARK_CLOUD_N * CLOUD_X_SPREAD;
+    for (const c of clouds) {
+      c.z += c.zDir * CLOUD_SPEED * dt;
+      const zWrap = CLOUD_Z_RANGE + 5;
+      if (c.z > frogZ + zWrap) c.z = frogZ - zWrap;
+      else if (c.z < frogZ - zWrap) c.z = frogZ + zWrap;
+      const dx = c.x - frogX;
+      if (dx < -CLOUD_X_SPREAD || dx > spreadX + CLOUD_X_SPREAD) {
+        const newDir = Math.random() > 0.5 ? 1 : -1;
+        c.x = frogX + 6 + Math.random() * 14;
+        c.zDir = newDir;
+        c.z = frogZ - newDir * (7 + Math.random() * 5);
+      }
+    }
+    clouds.forEach((c, i) => {
+      if (i >= activeCloudCount.current) return;
+      tmp.makeScale(c.w, 1.4, c.d);
+      tmp.setPosition(c.x, c.h, c.z);
+      base.setMatrixAt(i, tmp);
+
+      tmp.makeScale(c.w * 0.65, 2.0, c.d * 0.8);
+      tmp.setPosition(c.x + c.w * 0.06, c.h + 1.7, c.z);
+      mid.setMatrixAt(i, tmp);
+
+      tmp.makeScale(c.w * 0.38, 1.6, c.d * 0.65);
+      tmp.setPosition(c.x - c.w * 0.08, c.h + 3.1, c.z);
+      top.setMatrixAt(i, tmp);
+    });
+    base.count = mid.count = top.count = activeCloudCount.current;
+    base.instanceMatrix.needsUpdate = true;
+    mid.instanceMatrix.needsUpdate = true;
+    top.instanceMatrix.needsUpdate = true;
+  });
 
   return (
     <group>
@@ -305,17 +372,19 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
           <pointsMaterial color="#f4f0c0" size={0.12} transparent opacity={0.8} />
         </points>
       )}
-      {/* 구름 */}
-      {weather === "cloud" &&
-        cloudPositions.map((c, i) => (
-          <mesh
-            key={`cl-${i}`}
-            position={[frogX + c.offsetX, c.height, frogZ + c.offsetZ]}
-          >
-            <boxGeometry args={[12, 1.4, 6]} />
-            <meshBasicMaterial color="#ffffff" transparent opacity={0.85} />
-          </mesh>
-        ))}
+      {/* 먹구름 — base/mid/top 3층 구조 */}
+      <instancedMesh ref={cloudBaseRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#1a1a28" transparent opacity={0.93} depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={cloudMidRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#1c1c2c" transparent opacity={0.91} depthWrite={false} />
+      </instancedMesh>
+      <instancedMesh ref={cloudTopRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color="#1e1e30" transparent opacity={0.89} depthWrite={false} />
+      </instancedMesh>
     </group>
   );
 }
