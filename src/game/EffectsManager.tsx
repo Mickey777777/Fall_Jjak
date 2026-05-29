@@ -51,7 +51,12 @@ export default function EffectsManager({
     }
 
     const buffs = useGameStore.getState().buffs;
-    const rangeBonus = buffs.find((b) => b.type === "rangeUp") ? 1.3 : 1;
+    const rangeBuff = buffs.find((b) => b.type === "rangeUp");
+    const rangeBonus = rangeBuff ? 1.3 : 1;
+    const rangeBlink =
+      rangeBuff && rangeBuff.remaining < 2
+        ? Math.sin(performance.now() * 0.02) > 0
+        : false;
     const d =
       Math.max(JUMP.MIN_DISTANCE, Math.min(JUMP.MAX_DISTANCE, chargeDist)) *
       rangeBonus;
@@ -76,7 +81,8 @@ export default function EffectsManager({
       const fade = 1 - t * 0.85;
       const s = 0.17 * (0.4 + 0.6 * fade);
       dot.scale.set(s, s, s);
-      mat.opacity = 0.35 + 0.5 * fade;
+      mat.color.set(rangeBuff ? "#ffd84d" : "#fff5b0");
+      mat.opacity = rangeBlink ? 0.18 + 0.2 * fade : 0.35 + 0.5 * fade;
     }
   });
 
