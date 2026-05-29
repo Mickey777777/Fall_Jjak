@@ -90,6 +90,7 @@ export default function EffectsManager({
             archRefs.current[i] = el;
           }}
           visible={false}
+          renderOrder={60}
         >
           <boxGeometry args={[1, 1, 1]} />
           <meshBasicMaterial
