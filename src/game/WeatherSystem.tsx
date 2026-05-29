@@ -38,8 +38,7 @@ const CLOUD_X_SPREAD = 22;
  * 카메라가 그것을 통과하는 식으로 보인다 (배경이 따라다니지 않음).
  */
 export default function WeatherSystem({ frogX, frogZ }: Props) {
-  useGameStore((s) => s.weather);
-  const weather = "cloud" as import("./types").WeatherType; // 테스트용
+  const weather = useGameStore((s) => s.weather);
   const wind = useGameStore((s) => s.wind);
   const { scene } = useThree();
 
@@ -74,10 +73,10 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
     Array.from({ length: DARK_CLOUD_N }, (_, i) => {
       const dir = Math.random() > 0.5 ? 1 : -1;
       return {
-        x: 6 + i * CLOUD_X_SPREAD + Math.random() * 8,
-        z: -dir * (7 + Math.random() * 5),
+        x: i * CLOUD_X_SPREAD + Math.random() * 8,
+        z: (Math.random() - 0.5) * CLOUD_Z_RANGE * 1.8,
         zDir: dir,
-        h: 4.0 + Math.random() * 2.0,
+        h: 1.0 + Math.random() * 0.5,
         w: 11 + Math.random() * 8,
         d: 5 + Math.random() * 3,
       };
@@ -264,15 +263,14 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
     const spreadX = DARK_CLOUD_N * CLOUD_X_SPREAD;
     for (const c of clouds) {
       c.z += c.zDir * CLOUD_SPEED * dt;
-      const zWrap = CLOUD_Z_RANGE + 5;
+      const zWrap = CLOUD_Z_RANGE + c.d * 0.6;
       if (c.z > frogZ + zWrap) c.z = frogZ - zWrap;
       else if (c.z < frogZ - zWrap) c.z = frogZ + zWrap;
       const dx = c.x - frogX;
       if (dx < -CLOUD_X_SPREAD || dx > spreadX + CLOUD_X_SPREAD) {
-        const newDir = Math.random() > 0.5 ? 1 : -1;
-        c.x = frogX + 6 + Math.random() * 14;
-        c.zDir = newDir;
-        c.z = frogZ - newDir * (7 + Math.random() * 5);
+        c.x = frogX + Math.random() * spreadX;
+        c.z = frogZ + (Math.random() - 0.5) * CLOUD_Z_RANGE * 1.6;
+        c.zDir = Math.random() > 0.5 ? 1 : -1;
       }
     }
     clouds.forEach((c, i) => {
@@ -372,18 +370,18 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
           <pointsMaterial color="#f4f0c0" size={0.12} transparent opacity={0.8} />
         </points>
       )}
-      {/* 먹구름 — base/mid/top 3층 구조 */}
-      <instancedMesh ref={cloudBaseRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false}>
+      {/* 먹구름 — base/mid/top 3층 구조, renderOrder로 항상 마지막 렌더 보장 */}
+      <instancedMesh ref={cloudBaseRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false} renderOrder={50}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshBasicMaterial color="#1a1a28" transparent opacity={0.93} depthWrite={false} />
+        <meshBasicMaterial color="#2e2e48" transparent opacity={0.90} depthWrite={false} depthTest={false} />
       </instancedMesh>
-      <instancedMesh ref={cloudMidRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false}>
+      <instancedMesh ref={cloudMidRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false} renderOrder={51}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshBasicMaterial color="#1c1c2c" transparent opacity={0.91} depthWrite={false} />
+        <meshBasicMaterial color="#22223c" transparent opacity={0.94} depthWrite={false} depthTest={false} />
       </instancedMesh>
-      <instancedMesh ref={cloudTopRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false}>
+      <instancedMesh ref={cloudTopRef} args={[undefined, undefined, DARK_CLOUD_N]} frustumCulled={false} renderOrder={52}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshBasicMaterial color="#1e1e30" transparent opacity={0.89} depthWrite={false} />
+        <meshBasicMaterial color="#2a2a42" transparent opacity={0.88} depthWrite={false} depthTest={false} />
       </instancedMesh>
     </group>
   );
