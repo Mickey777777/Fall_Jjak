@@ -507,7 +507,25 @@ export default function LilyPadManager({ paused }: Props) {
       return { ...p, position: newPos };
     });
 
-    const { pad, dist } = nearestPad(lx, lz, padsForCollision);  // ← pads → padsForCollision
+    const safePads = padsForCollision.filter((p) => {
+      if (p.type === "trap") return false;
+      if (p.type === "blinking" && p.steppedAt == null) {
+        const cycle = ((performance.now() / 1000 - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+        if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;  // 꺼진 상태
+      }
+      return true;
+    });
+
+    // 1차: 안전한 연잎 중에서 가장 가까운 것 찾기
+    let { pad, dist } = nearestPad(lx, lz, safePads);
+
+    // 안전한 연잎이 멀거나 없으면 — trap 포함 전체에서 다시
+    if (!pad || Math.hypot(pad.position[0] - lx, pad.position[2] - lz) > pad.radius) {
+      const result = nearestPad(lx, lz, padsForCollision);
+      pad = result.pad;
+      dist = result.dist;
+    }
+
     if (!pad) {
       handleFall(lx, lz);
       return;
@@ -678,8 +696,8 @@ export default function LilyPadManager({ paused }: Props) {
       let zigSign: 1 | -1 = lastZ < 0 ? 1 : -1;
       while (maxX < fx + LILY.SPAWN_AHEAD * (LILY.MAX_GAP + 4)) {
         // 점수가 높아질수록 간격이 최대 1.6배까지 늘어남
-        const sparsity = Math.min(1.6, 1 + score / 1000);
-        const sizeFactor = Math.max(0.75, 1.2 - score / 1200);
+        const sparsity = Math.min(1.4, 1 + score / 2000);
+        const sizeFactor = Math.max(0.77, 1.2 - score / 1200);
         const gap = gapForDifficulty(diff, Math.random) * sparsity;
         // 지그재그 — 다음 패드는 이전과 반대 쪽으로 향함 (가끔 직진)
         const straight = Math.random() < 0.25;
@@ -698,16 +716,19 @@ export default function LilyPadManager({ paused }: Props) {
           lat = lastZ + Math.sign(desiredDz) * maxDz;
         }
         let type = DEBUG_FORCE_PAD_TYPE ?? pickPadType(diff, Math.random);
+
+        if (!DEBUG_FORCE_PAD_TYPE && (type === "spring" || type === "trap")) {
+          type = "basic";
+        }
         // 점수가 높아질수록 basic을 특수 연잎으로 바꿈 (trap 제외)
         if (type === "basic" && !DEBUG_FORCE_PAD_TYPE) {
-          const specialChance = Math.min(0.5, score / 1500);
+          const specialChance = Math.min(0.6, 0.1 + score / 1500);
           if (Math.random() < specialChance) {
             const specials: LilyPadData["type"][] = [
               "rotten",
               "slippery",
               "moving",
               "rotating",
-              "spring",
               "blinking",
             ];
             type = specials[Math.floor(Math.random() * specials.length)];
@@ -753,6 +774,14 @@ export default function LilyPadManager({ paused }: Props) {
           const bx = maxX - gap * (0.4 + Math.random() * 0.5);
           const bz = lat + (-zigSign) * (1.6 + Math.random() * 2.2);
           if (Math.abs(bz) > LILY.MAX_LATERAL * 1.4) continue;
+
+          // ★ 곁가지 타입 결정 — 점수 따라 spring/trap이 등장
+          let branchType: LilyPadData["type"] = "basic";
+          const dangerChance = Math.min(0.35, score / 2000);  // 최대 35%
+          if (Math.random() < dangerChance) {
+            branchType = Math.random() < 0.5 ? "spring" : "trap";  // 5:5
+          }
+          
           kept.push({
             id: ++padIdRef.current,
             type: "basic",
