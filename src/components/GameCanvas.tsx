@@ -38,8 +38,6 @@ export default function GameCanvas({ paused }: Props) {
           scene.background = null; // CSS 배경 사용
         }}
       >
-        {/* 시야 끝에서 둑/나무가 잘려 보이지 않도록 부드럽게 페이드 */}
-        <fog attach="fog" args={[COLORS.FOG, 24, 52]} />
         <Suspense fallback={null}>
           {/* 빛 — 평평하고 채도 높은 픽셀 아트 조명 */}
           <ambientLight intensity={1.05} color={"#ffffff"} />
