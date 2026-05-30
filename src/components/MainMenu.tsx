@@ -3,18 +3,26 @@ import {
   Cloud,
   CloudFog,
   CloudRain,
+  Droplets,
+  EyeOff,
   Gauge,
   HelpCircle,
-  type LucideIcon,
+  MoveHorizontal,
+  RotateCw,
+  Skull,
+  Sparkles,
   Star,
+  Timer,
   Trophy,
   Waves,
   Wind,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { useGameStore } from "../store/useGameStore";
 
-type HelpTab = "weather" | "buff" | "judgment";
+type HelpTab = "weather" | "buff" | "lilypad" | "judgment";
 type HelpItem = {
   Icon: LucideIcon;
   name: string;
@@ -71,6 +79,51 @@ const BUFF_HELP: HelpItem[] = [
   },
 ];
 
+const LILYPAD_HELP: HelpItem[] = [
+  {
+    Icon: Timer,
+    name: "썩은 연잎",
+    color: "#9c8244",
+    description: "한 번 밟으면 잠시 뒤 사라집니다.",
+  },
+  {
+    Icon: Droplets,
+    name: "미끄러운 연잎",
+    color: "#7dd3e0",
+    description: "착지 후 몸이 미끄러져 위치가 밀립니다.",
+  },
+  {
+    Icon: MoveHorizontal,
+    name: "움직이는 연잎",
+    color: "#5a8fd8",
+    description: "좌우 또는 앞뒤로 움직입니다.",
+  },
+  {
+    Icon: RotateCw,
+    name: "회전 연잎",
+    color: "#f5d36e",
+    description: "착지 후 다음 조준 방향이 살짝 틀어집니다.",
+  },
+  {
+    Icon: Skull,
+    name: "함정 연잎",
+    color: "#e35f6f",
+    description: "밟으면 바로 실패합니다.",
+  },
+  {
+    Icon: Zap,
+    name: "스프링 연잎",
+    color: "#c8ff5e",
+    description: "착지하면 탄성으로 튀어 오릅니다.",
+  },
+  {
+    Icon: EyeOff,
+    name: "점멸 연잎",
+    color: "#d6ee8a",
+    description: "나타났다 사라지기를 반복합니다.",
+  },
+];
+
 const JUDGMENT_HELP: HelpItem[] = [
   {
     Icon: Trophy,
@@ -85,7 +138,7 @@ const JUDGMENT_HELP: HelpItem[] = [
     description: "안정적으로 좋은 위치에 착지했을 때 받는 판정입니다.",
   },
   {
-    Icon: Star,
+    Icon: Sparkles,
     name: "Not bad.. +10",
     color: "#9CA3AF",
     description: "연잎에 착지했지만 중심에서 조금 벗어났을 때 받는 기본 판정입니다.",
@@ -133,7 +186,9 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
       ? WEATHER_HELP
       : tab === "buff"
         ? BUFF_HELP
-        : JUDGMENT_HELP;
+        : tab === "lilypad"
+          ? LILYPAD_HELP
+          : JUDGMENT_HELP;
 
   return (
     <div className="help-backdrop" onMouseDown={onClose}>
@@ -157,6 +212,12 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
             onClick={() => setTab("buff")}
           >
             버프
+          </button>
+          <button
+            className={tab === "lilypad" ? "active" : ""}
+            onClick={() => setTab("lilypad")}
+          >
+            연잎
           </button>
           <button
             className={tab === "judgment" ? "active" : ""}
