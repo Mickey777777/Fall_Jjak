@@ -2,7 +2,7 @@ import type { Vector3Tuple } from "three";
 
 export type GamePhase = "menu" | "control" | "playing" | "paused" | "gameover";
 
-export type JudgmentType = "Yarr" | "Great" | "NotBad" | "Miss";
+export type JudgmentType = "Yarr" | "Great" | "NotBad" | "Miss" | "Chomp";
 
 export type LilyPadType =
   | "basic"
