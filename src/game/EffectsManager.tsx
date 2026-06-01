@@ -65,7 +65,7 @@ export default function EffectsManager({
 
     // 공중 아치 — 5 ~ 70% 구간을 보여줌 (마지막 30% 는 여전히 가려짐)
     const archStart = 0.05;
-    const archEnd = 0.70;
+    const archEnd = 0.75;
     for (let i = 0; i < ARCH_DOTS; i++) {
       const dot = archRefs.current[i];
       const mat = archMats.current[i];
@@ -74,7 +74,7 @@ export default function EffectsManager({
       const u = archStart + t * (archEnd - archStart);
       const x = frogX + dirX * d * u;
       const z = frogZ + dirZ * d * u;
-      const y = 4 * arcHeight * u * (1 - u) + 0.45;
+      const y = 4 * arcHeight * u * (1 - u) + 0.22;
       dot.position.set(x, y, z);
       dot.visible = true;
       // 마지막 점이 너무 흐려지지 않게 fade 범위 완화

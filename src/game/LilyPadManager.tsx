@@ -113,7 +113,7 @@ export default function LilyPadManager({ paused }: Props) {
   // raycast 유틸
   const raycaster = useMemo(() => new Raycaster(), []);
   const aimPlane = useMemo(
-    () => new Plane(new Vector3(0, 1, 0), -WORLD.PAD_TOP_Y),
+    () => new Plane(new Vector3(0, 1, 0), -(WORLD.PAD_TOP_Y - 0.22)),
     [],
   );
   const mouseNdc = useMemo(() => new Vector2(), []);
