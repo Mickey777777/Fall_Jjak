@@ -39,7 +39,8 @@ const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
 interface Props {
   paused: boolean;
 }
-
+// 🧪 디버그: 특정 아이템만 스폰 (테스트 끝나면 null로)
+const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
 /**
  * 게임의 메인 시뮬레이션 루프.
  *
@@ -413,9 +414,9 @@ export default function LilyPadManager({ paused }: Props) {
         const dx = p.position[0] - fx;
         const dz = p.position[2] - fz;
         if (Math.hypot(dx, dz) < p.radius) {
+          // rotten 만료
           if (now - p.steppedAt >= LILY.ROTTEN_LIFETIME) {
-            playPlop();
-            finishRun();
+            handleFall(frog.current.x, frog.current.z, p.id);
             return;
           }
         }
@@ -429,9 +430,9 @@ export default function LilyPadManager({ paused }: Props) {
         const dz = p.position[2] - fz;
         if (Math.hypot(dx, dz) < p.radius) {
           const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+          // blinking 꺼진 상태
           if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
-            playPlop();
-            finishRun();
+            handleFall(frog.current.x, frog.current.z, p.id);
             return;
           }
         }
@@ -468,8 +469,7 @@ export default function LilyPadManager({ paused }: Props) {
         }
       }
       if (!onPad) {
-        playPlop();
-        finishRun();
+        handleFall(frog.current.x, frog.current.z);
         return;
       }
     }
@@ -608,10 +608,26 @@ export default function LilyPadManager({ paused }: Props) {
       );
     }
     if (pad.type === "slippery" || useGameStore.getState().weather === "rain") {
-      // 점프 방향으로 살짝 미끄러짐 — 모멘텀이 남은 듯한 느낌
-      const SLIDE_DIST = 0.75;       // 총 밀려나는 거리 (연잎 반지름보다 작게)
-      const SLIDE_DURATION = 0.85;  // 미끄러지는 시간(초)
-      const initialSpeed = (2.5 * SLIDE_DIST) / SLIDE_DURATION; // ease-out 보정
+      // 점프 방향으로 미끄러짐(모멘텀). 거리를 "착지 연잎 크기"에 비례시킨다.
+      // 작은 연잎일수록 덜 미끄러지지만, 잘못 착지하면 여전히 미끄러져 죽을 수 있음.
+      const incomingDist = Math.hypot(
+        plan.endX - plan.startX,
+        plan.endZ - plan.startZ,
+      );
+      // 점프 거리 0~1 정규화 (가까운 점프 0, 최대 사거리 1)
+      const momentum = Math.max(
+        0,
+        Math.min(
+          1,
+          (incomingDist - JUMP.MIN_DISTANCE) /
+          (JUMP.MAX_DISTANCE - JUMP.MIN_DISTANCE),
+        ),
+      );
+      // 연잎 반지름 대비: 짧은 점프 25% ~ 긴 점프 70%
+      const slideDist = pad.radius * (0.25 + momentum * 0.45);
+
+      const SLIDE_DURATION = 0.85;
+      const initialSpeed = (2.5 * slideDist) / SLIDE_DURATION; // ease-out 보정
       slideRef.current = {
         vx: Math.cos(aimDirRef.current) * initialSpeed,
         vz: Math.sin(aimDirRef.current) * initialSpeed,
@@ -651,17 +667,20 @@ export default function LilyPadManager({ paused }: Props) {
       currentPadRef.current = null;
     }
   }
-
-  function handleFall(x: number, z: number) {
+  function handleFall(x: number, z: number, excludePadId?: number) {
     // 생존 수영 버프 검사
     if (consumeSwimBuff()) {
-      const { pad } = nearestPad(x, z, pads);
+      const usable =
+        excludePadId == null ? pads : pads.filter((p) => p.id !== excludePadId);
+      const { pad } = nearestPad(x, z, usable);
       if (pad) {
         frog.current.x = pad.position[0];
         frog.current.z = pad.position[2];
         frog.current.y = 0;
         landedPos.current.x = pad.position[0];
         landedPos.current.z = pad.position[2];
+        slideRef.current = null;       // ★ 잔여 슬라이드 제거 (복귀 직후 또 미끄러져 죽는 것 방지)
+        currentPadRef.current = null;  // ★ 이동 연잎 추적 해제
         addPopup({
           id: ++popupIdRef.current,
           type: "Great",
@@ -676,6 +695,7 @@ export default function LilyPadManager({ paused }: Props) {
     playPlop();
     finishRun();
   }
+ 
 
   /** 개구리 진행에 따라 뒤쪽 연잎/적/아이템 정리하고 앞쪽에 새로 생성 */
   function cullAndSpawn() {
@@ -811,13 +831,15 @@ export default function LilyPadManager({ paused }: Props) {
           setEnemies((es) => [...es, enemy]);
         }
         // 아이템 스폰
-        if (Math.random() < 0.13) {
-          const t =
-            Math.random() < 0.55
+        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 0.13 : 0.13; // 
+        if (Math.random() < itemChance) {
+          const t: ItemData["type"] =
+            DEBUG_FORCE_ITEM_TYPE ??
+            (Math.random() < 0.55
               ? "rangeUp"
               : Math.random() < 0.7
                 ? "swim"
-                : "scoreBoost";
+                : "scoreBoost");
           const item: ItemData = {
             id: ++itemIdRef.current,
             type: t,
