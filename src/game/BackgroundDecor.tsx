@@ -5,6 +5,7 @@ import {
   type InstancedMesh,
   type Mesh,
   Matrix4,
+  Vector3,
 } from "three";
 import Tree from "./Tree";
 import { initSlots, slotHash, updateSlots } from "./slotRecycler";
@@ -23,12 +24,26 @@ const BANK_Z = 12.5;
 // 각 장식의 (instance 수, 슬롯 폭, cullBehind)
 const GRASS = { N: 80, SPACING: 1.0, CULL: 12 };
 const TREE = { N: 14, SPACING: 4.5, CULL: 3 };
+// 둑 너머 한 겹 더 깔리는 나무 — 앞 나무와 동일 크기·디테일 (원근 보정 없음), 약간 뒤에
+const FAR_TREE = { N: 12, SPACING: 5.5, CULL: 3 };
+const FAR_TREE_ZOFF = 4.5; // BANK_Z 로부터의 깊이
+const FAR_TREE_ZJIT = 2.0;
+// 둑 너머 침엽수(뾰족 소나무, 3단 피라미드) + 바위 — 활엽수 사이에 섞어 식생 다양화
+// 앞 나무 줄(z+1.5~2.7) / 먼 나무 줄(z+4.5~6.5) 사이 갭에 바위, 침엽수는 먼 나무 줄에 합류
+const PINE = { N: 10, SPACING: 6.0, CULL: 3, ZOFF: 5.0, ZJIT: 2.5 };
+const ROCK = { N: 12, SPACING: 4.5, CULL: 3, ZOFF: 3.0, ZJIT: 1.4 };
+const PINE_TRUNK_COLOR = "#5c4033";
+const PINE_LEAF_COLOR = "#3d7a4a";
+const ROCK_COLOR = "#9a9a9a";
+const ROCK_DARK_COLOR = "#828282";
+const BANK_TOP_Y = -0.2; // 둑 잔디 윗면 높이
 const REED = { N: 28, SPACING: 2.4, CULL: 4 };
 const FLOWER = { N: 22, SPACING: 3.0, CULL: 3 };
 const PEBBLE = { N: 18, SPACING: 3.6, CULL: 3 };
 const TRASH = { N: 6, SPACING: 12.0, CULL: 1 };
 const OUTER_FLOWER = { N: 40, SPACING: 1.8, CULL: 3 };
 const MUSHROOM = { N: 16, SPACING: 3.6, CULL: 2 };
+
 
 // 인덱스 → 트리 종류 (벚꽃 3 : 사과 3 : 주황 2 : 일반 2 비율)
 function treeVariant(idx: number): "cherry" | "apple" | "orange" | "plain" {
@@ -46,6 +61,9 @@ export default function BackgroundDecor({ frogX }: Props) {
   const grassNorthSlots = useRef<number[]>(initSlots(GRASS.N, GRASS.CULL));
   const grassSouthSlots = useRef<number[]>(initSlots(GRASS.N, GRASS.CULL));
   const treeSlots = useRef<number[]>(initSlots(TREE.N, TREE.CULL));
+  const farTreeSlots = useRef<number[]>(initSlots(FAR_TREE.N, FAR_TREE.CULL));
+  const pineSlots = useRef<number[]>(initSlots(PINE.N, PINE.CULL));
+  const rockSlots = useRef<number[]>(initSlots(ROCK.N, ROCK.CULL));
   const reedSlots = useRef<number[]>(initSlots(REED.N, REED.CULL));
   const flowerSlots = useRef<number[]>(initSlots(FLOWER.N, FLOWER.CULL));
   const pebbleSlots = useRef<number[]>(initSlots(PEBBLE.N, PEBBLE.CULL));
@@ -66,6 +84,16 @@ export default function BackgroundDecor({ frogX }: Props) {
   const hillSouthRef = useRef<Mesh>(null);
   const treeNorthRefs = useRef<(Group | null)[]>([]);
   const treeSouthRefs = useRef<(Group | null)[]>([]);
+  const farTreeNorthRefs = useRef<(Group | null)[]>([]);
+  const farTreeSouthRefs = useRef<(Group | null)[]>([]);
+  const pineTrunkRef = useRef<InstancedMesh>(null);
+  const pineTier1Ref = useRef<InstancedMesh>(null);
+  const pineTier2Ref = useRef<InstancedMesh>(null);
+  const pineTier3Ref = useRef<InstancedMesh>(null);
+  const rockRoundRef = useRef<InstancedMesh>(null); // 둥근 돌 (구)
+  const rockBoxRef = useRef<InstancedMesh>(null); // 각진 바위 (박스)
+  const rockBoxTopRef = useRef<InstancedMesh>(null); // 각진 바위 위 작은 박스
+  const rockSlabRef = useRef<InstancedMesh>(null); // 납작한 판석
   const reedRef = useRef<InstancedMesh>(null);
   const flowerPetalRef = useRef<InstancedMesh>(null);
   const flowerCenterRef = useRef<InstancedMesh>(null);
@@ -79,6 +107,7 @@ export default function BackgroundDecor({ frogX }: Props) {
   const mushroomDotRef = useRef<InstancedMesh>(null);
 
   const tmp = useMemo(() => new Matrix4(), []);
+  const tmpScl = useMemo(() => new Vector3(), []);
 
   useFrame(() => {
     // ⓪ 카메라 따라가는 큰 배경 메시들 — frogX 스냅으로 이동
@@ -149,6 +178,25 @@ export default function BackgroundDecor({ frogX }: Props) {
       const xS = s * TREE.SPACING + (slotHash(sh, 4) - 0.5) * TREE.SPACING * 0.5;
       const zS = -(BANK_Z + 1.5 + slotHash(sh, 6) * 1.2);
       const gS = treeSouthRefs.current[i];
+      if (gS) {
+        gS.position.set(xS, -0.2, zS);
+        gS.rotation.y = 0;
+      }
+    });
+
+    // ②-b 먼 나무 — 둑 너머 한 겹 더, 약간 작고 듬성하게
+    updateSlots(farTreeSlots.current, frogX, FAR_TREE.SPACING, FAR_TREE.CULL, (i, s) => {
+      const sh = s + treeSlotOffset;
+      const xN = s * FAR_TREE.SPACING + (slotHash(sh, 13) - 0.5) * FAR_TREE.SPACING * 0.5;
+      const zN = BANK_Z + FAR_TREE_ZOFF + slotHash(sh, 15) * FAR_TREE_ZJIT;
+      const gN = farTreeNorthRefs.current[i];
+      if (gN) {
+        gN.position.set(xN, -0.2, zN);
+        gN.rotation.y = 0;
+      }
+      const xS = s * FAR_TREE.SPACING + (slotHash(sh, 14) - 0.5) * FAR_TREE.SPACING * 0.5;
+      const zS = -(BANK_Z + FAR_TREE_ZOFF + slotHash(sh, 16) * FAR_TREE_ZJIT);
+      const gS = farTreeSouthRefs.current[i];
       if (gS) {
         gS.position.set(xS, -0.2, zS);
         gS.rotation.y = 0;
@@ -311,6 +359,117 @@ export default function BackgroundDecor({ frogX }: Props) {
       mesh.count = TRASH.N;
       mesh.instanceMatrix.needsUpdate = true;
     }
+
+    // ⑦ 침엽수 — 둑 너머 잔디밭, 기둥 + 잎 3단 피라미드 (양쪽은 hash 로 분기)
+    if (
+      pineTrunkRef.current &&
+      pineTier1Ref.current &&
+      pineTier2Ref.current &&
+      pineTier3Ref.current
+    ) {
+      const trunk = pineTrunkRef.current;
+      const t1 = pineTier1Ref.current;
+      const t2 = pineTier2Ref.current;
+      const t3 = pineTier3Ref.current;
+      updateSlots(pineSlots.current, frogX, PINE.SPACING, PINE.CULL, (i, s) => {
+        const side: 1 | -1 = slotHash(s, 201) > 0.5 ? 1 : -1;
+        const x = s * PINE.SPACING + (slotHash(s, 202) - 0.5) * PINE.SPACING * 0.6;
+        const z = side * (BANK_Z + PINE.ZOFF + slotHash(s, 203) * PINE.ZJIT);
+        const sc = 0.85 + slotHash(s, 204) * 0.5; // 그루마다 크기 변화
+        // 기둥
+        tmp.makeScale(0.22 * sc, 0.9 * sc, 0.22 * sc);
+        tmp.setPosition(x, BANK_TOP_Y + 0.45 * sc, z);
+        trunk.setMatrixAt(i, tmp);
+        // 잎 1단 (가장 넓음)
+        tmp.makeScale(1.4 * sc, 0.8 * sc, 1.4 * sc);
+        tmp.setPosition(x, BANK_TOP_Y + 1.2 * sc, z);
+        t1.setMatrixAt(i, tmp);
+        // 잎 2단
+        tmp.makeScale(1.0 * sc, 0.7 * sc, 1.0 * sc);
+        tmp.setPosition(x, BANK_TOP_Y + 1.85 * sc, z);
+        t2.setMatrixAt(i, tmp);
+        // 잎 3단 (꼭대기)
+        tmp.makeScale(0.55 * sc, 0.6 * sc, 0.55 * sc);
+        tmp.setPosition(x, BANK_TOP_Y + 2.45 * sc, z);
+        t3.setMatrixAt(i, tmp);
+      });
+      trunk.count = t1.count = t2.count = t3.count = PINE.N;
+      trunk.instanceMatrix.needsUpdate = true;
+      t1.instanceMatrix.needsUpdate = true;
+      t2.instanceMatrix.needsUpdate = true;
+      t3.instanceMatrix.needsUpdate = true;
+    }
+
+    // ⑧ 바위 — 둑 너머 잔디밭. 슬롯마다 3종(둥근/각진/판석) 중 하나를 hash 로 선택
+    if (
+      rockRoundRef.current &&
+      rockBoxRef.current &&
+      rockBoxTopRef.current &&
+      rockSlabRef.current
+    ) {
+      const round = rockRoundRef.current;
+      const box = rockBoxRef.current;
+      const boxTop = rockBoxTopRef.current;
+      const slab = rockSlabRef.current;
+      let roundIdx = 0;
+      let boxIdx = 0;
+      let slabIdx = 0;
+      updateSlots(rockSlots.current, frogX, ROCK.SPACING, ROCK.CULL, (_, s) => {
+        const side: 1 | -1 = slotHash(s, 211) > 0.5 ? 1 : -1;
+        const x = s * ROCK.SPACING + (slotHash(s, 212) - 0.5) * ROCK.SPACING * 0.7;
+        const z = side * (BANK_Z + ROCK.ZOFF + slotHash(s, 213) * ROCK.ZJIT);
+        const ry = slotHash(s, 217) * Math.PI * 2; // Y축 랜덤 회전
+        const kind = slotHash(s, 220);
+        if (kind < 0.38) {
+          // 둥근 돌 — 살짝 눌린 구
+          const r = 0.45 + slotHash(s, 214) * 0.5;
+          const fy = 0.6 + slotHash(s, 215) * 0.3;
+          tmpScl.set(r, r * fy, r * (0.85 + slotHash(s, 216) * 0.3));
+          tmp.makeRotationY(ry);
+          tmp.scale(tmpScl);
+          tmp.setPosition(x, BANK_TOP_Y + r * fy * 0.5 - 0.18, z);
+          round.setMatrixAt(roundIdx++, tmp);
+        } else if (kind < 0.72) {
+          // 각진 바위 — 큰 박스 + 작은 박스 얹기
+          const w = 0.6 + slotHash(s, 214) * 0.9;
+          const h = 0.4 + slotHash(s, 215) * 0.5;
+          const d = 0.6 + slotHash(s, 216) * 0.7;
+          tmpScl.set(w, h, d);
+          tmp.makeRotationY(ry);
+          tmp.scale(tmpScl);
+          tmp.setPosition(x, BANK_TOP_Y + h * 0.5 - 0.15, z);
+          box.setMatrixAt(boxIdx, tmp);
+          tmpScl.set(w * 0.5, h * 0.6, d * 0.6);
+          tmp.makeRotationY(ry + 0.6);
+          tmp.scale(tmpScl);
+          tmp.setPosition(
+            x + (slotHash(s, 218) - 0.5) * w * 0.4,
+            BANK_TOP_Y + h * 0.85,
+            z + (slotHash(s, 219) - 0.5) * d * 0.4,
+          );
+          boxTop.setMatrixAt(boxIdx, tmp);
+          boxIdx++;
+        } else {
+          // 납작한 판석 — 넓고 낮은 박스
+          const w = 0.9 + slotHash(s, 214) * 0.8;
+          const h = 0.18 + slotHash(s, 215) * 0.16;
+          const d = 0.7 + slotHash(s, 216) * 0.6;
+          tmpScl.set(w, h, d);
+          tmp.makeRotationY(ry);
+          tmp.scale(tmpScl);
+          tmp.setPosition(x, BANK_TOP_Y + h * 0.5 - 0.1, z);
+          slab.setMatrixAt(slabIdx++, tmp);
+        }
+      });
+      round.count = roundIdx;
+      box.count = boxIdx;
+      boxTop.count = boxIdx;
+      slab.count = slabIdx;
+      round.instanceMatrix.needsUpdate = true;
+      box.instanceMatrix.needsUpdate = true;
+      boxTop.instanceMatrix.needsUpdate = true;
+      slab.instanceMatrix.needsUpdate = true;
+    }
   });
 
   return (
@@ -447,6 +606,114 @@ export default function BackgroundDecor({ frogX }: Props) {
           />
         </group>
       ))}
+      {/* 먼 나무 — 둑 너머 한 겹 더 (작게·열매 없이). 앞 나무와 같은 Tree */}
+      {Array.from({ length: FAR_TREE.N }).map((_, i) => (
+        <group
+          key={`fartree-n-${i}`}
+          ref={(g) => {
+            farTreeNorthRefs.current[i] = g;
+          }}
+        >
+          <Tree
+            seed={(i + treeSeedOffset + 50) * 7 + 13}
+            variant={treeVariant(i * 7 + treeVariantOffset + 3)}
+            detailCount={2}
+          />
+        </group>
+      ))}
+      {Array.from({ length: FAR_TREE.N }).map((_, i) => (
+        <group
+          key={`fartree-s-${i}`}
+          ref={(g) => {
+            farTreeSouthRefs.current[i] = g;
+          }}
+        >
+          <Tree
+            seed={(i + treeSeedOffset + 150) * 7 + 13}
+            variant={treeVariant(i * 7 + treeVariantOffset + 11)}
+            detailCount={2}
+          />
+        </group>
+      ))}
+
+      {/* 침엽수 — 기둥 + 잎 3단 피라미드 (어두운 청록) */}
+      <instancedMesh
+        ref={pineTrunkRef}
+        args={[undefined, undefined, PINE.N]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={PINE_TRUNK_COLOR} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={pineTier1Ref}
+        args={[undefined, undefined, PINE.N]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={PINE_LEAF_COLOR} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={pineTier2Ref}
+        args={[undefined, undefined, PINE.N]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={PINE_LEAF_COLOR} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={pineTier3Ref}
+        args={[undefined, undefined, PINE.N]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={PINE_LEAF_COLOR} roughness={1} />
+      </instancedMesh>
+
+      {/* 바위 — 3종: 둥근 돌(구) / 각진 바위(박스+작은박스) / 판석(납작 박스) */}
+      <instancedMesh
+        ref={rockRoundRef}
+        args={[undefined, undefined, ROCK.N]}
+        castShadow
+        receiveShadow
+        frustumCulled={false}
+      >
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshStandardMaterial color={ROCK_COLOR} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={rockBoxRef}
+        args={[undefined, undefined, ROCK.N]}
+        castShadow
+        receiveShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={ROCK_COLOR} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={rockBoxTopRef}
+        args={[undefined, undefined, ROCK.N]}
+        castShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={ROCK_DARK_COLOR} roughness={1} />
+      </instancedMesh>
+      <instancedMesh
+        ref={rockSlabRef}
+        args={[undefined, undefined, ROCK.N]}
+        castShadow
+        receiveShadow
+        frustumCulled={false}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={ROCK_DARK_COLOR} roughness={1} />
+      </instancedMesh>
 
       {/* 갈대 */}
       <instancedMesh
