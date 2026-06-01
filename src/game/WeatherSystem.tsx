@@ -1,10 +1,11 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
+  type AmbientLight,
   BufferAttribute,
   BufferGeometry,
   Color,
-  Fog,
+  FogExp2,
   type InstancedMesh,
   Matrix4,
   Points,
@@ -24,6 +25,13 @@ const SPARKLE = { N: 30, SPACING: 1.6, CULL: 6 };
 const DECO_PAD = { N: 60, SPACING: 1.0, CULL: 14 };
 const SEAWEED = { N: 24, SPACING: 2.2, CULL: 4 };
 
+// 안개 튜닝값
+const FOG_LERP_SPEED = 0.5;       // 전환 속도 (클수록 빠름, ~5~6초 전환)
+const FOG_MAX_DENSITY = 0.06;     // FogExp2 최대 density
+const FOG_AMBIENT_MAX = 0.4;      // 안개 ambient light 최대 intensity
+const FOG_BG_ON_THRESHOLD = 0.15; // scene.background를 안개색으로 바꾸는 임계값
+const FOG_BG_OFF_THRESHOLD = 0.05; // scene.background를 null로 복원하는 임계값
+
 // 먹구름 — 맵에 고정 스폰, Z 축으로 천천히 이동하며 연잎을 가림
 const DARK_CLOUD_N = 2;
 const CLOUD_Z_RANGE = 15;
@@ -42,11 +50,38 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
   const wind = useGameStore((s) => s.wind);
   const { scene } = useThree();
 
-  useFrame(() => {
-    if (weather === "fog") {
-      if (!scene.fog) scene.fog = new Fog(COLORS.FOG, 16, 42);
+  const fogObj = useMemo(() => new FogExp2(COLORS.FOG, 0), []);
+  const fogBgColor = useMemo(() => new Color(COLORS.FOG), []);
+  const fogIntensityRef = useRef(0);
+  const fogAmbientRef = useRef<AmbientLight>(null);
+
+  useEffect(() => {
+    return () => {
+      scene.fog = null;
+      scene.background = null;
+    };
+  }, [scene]);
+
+  useFrame((_, dt) => {
+    const target = weather === "fog" ? 1 : 0;
+    fogIntensityRef.current += (target - fogIntensityRef.current) * FOG_LERP_SPEED * dt;
+    const intensity = fogIntensityRef.current;
+
+    if (intensity > 0.001) {
+      scene.fog = fogObj;
+      fogObj.density = intensity * FOG_MAX_DENSITY;
     } else {
       scene.fog = null;
+    }
+
+    if (intensity > FOG_BG_ON_THRESHOLD) {
+      scene.background = fogBgColor;
+    } else if (intensity < FOG_BG_OFF_THRESHOLD) {
+      scene.background = null;
+    }
+
+    if (fogAmbientRef.current) {
+      fogAmbientRef.current.intensity = intensity * FOG_AMBIENT_MAX;
     }
   });
 
@@ -295,6 +330,9 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
 
   return (
     <group>
+      {/* 안개 전용 ambient — intensity는 useFrame에서 fogIntensityRef에 따라 조절 */}
+      <ambientLight ref={fogAmbientRef} color="#9ab0bc" intensity={0} />
+
       {/* 수면 — 거대한 단색 평면 (개구리 따라가도 무방, 색이 균일해 차이가 안 보임) */}
       <mesh
         rotation={[-Math.PI / 2, 0, 0]}
@@ -354,7 +392,7 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
 
       {/* 비 */}
       {weather === "rain" && (
-        <points ref={rainRef} geometry={rainGeometry}>
+        <points ref={rainRef} geometry={rainGeometry} frustumCulled={false}>
           <pointsMaterial
             color="#c9eaf5"
             size={0.14}
@@ -366,7 +404,7 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
       )}
       {/* 강풍 먼지 */}
       {weather === "wind" && (
-        <points ref={dustRef} geometry={dustGeometry}>
+        <points ref={dustRef} geometry={dustGeometry} frustumCulled={false}>
           <pointsMaterial color="#f4f0c0" size={0.12} transparent opacity={0.8} />
         </points>
       )}
