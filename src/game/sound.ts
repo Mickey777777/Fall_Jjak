@@ -75,6 +75,43 @@ export function playPlop() {
   setTimeout(() => blip(110, "sine", 0.25, 0.18), 60);
 }
 
+export function playSplash() {
+  if (isMuted()) return;
+  const c = getCtx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+
+  // 저음 충격
+  blip(75, "sine", 0.32, 0.30);
+  setTimeout(() => blip(115, "sine", 0.22, 0.22), 35);
+
+  // 노이즈 버스트 (물 튀는 소리)
+  const sr = c.sampleRate;
+  const frames = Math.ceil(sr * 0.38);
+  const buf = c.createBuffer(1, frames, sr);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < frames; i++) d[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const bpf = c.createBiquadFilter();
+  bpf.type = "bandpass";
+  bpf.frequency.value = 1400;
+  bpf.Q.value = 0.7;
+  const g = c.createGain();
+  const t0 = c.currentTime;
+  g.gain.setValueAtTime(0.14, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.38);
+  src.connect(bpf);
+  bpf.connect(g);
+  g.connect(c.destination);
+  src.start(t0);
+  src.stop(t0 + 0.4);
+
+  // 방울 떨어지는 고음
+  setTimeout(() => blip(750, "sine", 0.09, 0.06), 90);
+  setTimeout(() => blip(560, "sine", 0.11, 0.05), 160);
+}
+
 export function playSlurp() {
   blip(540, "sawtooth", 0.07, 0.12);
   setTimeout(() => blip(820, "triangle", 0.08, 0.12), 35);

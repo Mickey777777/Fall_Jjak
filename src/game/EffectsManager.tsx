@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, LinearFilter } from "three";
-import type { Mesh, MeshBasicMaterial } from "three";
+import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { useGameStore } from "../store/useGameStore";
 import { JUMP } from "./constants";
 import type { JudgmentPopup } from "./types";
@@ -15,7 +15,16 @@ interface Props {
   isCharging: boolean;
   isJumping: boolean;
   yarrBurst: { x: number; z: number; bornAt: number } | null;
+  splashAt: { x: number; z: number; bornAt: number } | null;
+  crocSnapAt: { x: number; z: number; cx: number; cz: number; bornAt: number } | null;
 }
+
+const SPLASH_DUR = 1400;
+const SPLASH_RINGS = 3;
+const SPLASH_DROPS = 14;
+const CROC_DUR = 900;
+const CROC_RINGS = 2;
+const CROC_SPIKES = 12;
 
 /**
  * 충전 중에만 보이는 공중 아치 점선 + 판정 popup.
@@ -35,6 +44,8 @@ export default function EffectsManager({
   isCharging,
   isJumping,
   yarrBurst,
+  splashAt,
+  crocSnapAt,
 }: Props) {
   const popups = useGameStore((s) => s.popups);
   const archRefs = useRef<(Mesh | null)[]>([]);
@@ -128,6 +139,8 @@ export default function EffectsManager({
       })}
 
       {yarrBurst ? <YarrBurst burst={yarrBurst} /> : null}
+      {splashAt ? <SplashEffect splash={splashAt} /> : null}
+      {crocSnapAt ? <CrocSnapEffect snap={crocSnapAt} /> : null}
     </group>
   );
 }
@@ -224,7 +237,7 @@ function createPopupTexture(text: string, color: string) {
 }
 
 function popupPopScale(type: string, age: number) {
-  const strength = type === "Yarr" ? 0.45 : type === "Great" ? 0.22 : 0;
+  const strength = type === "Yarr" ? 0.45 : type === "Great" ? 0.22 : type === "Chomp" ? 0.6 : 0;
   if (strength === 0 || age >= 0.32) return 1;
 
   const t = age / 0.32;
@@ -278,13 +291,268 @@ function YarrBurst({ burst }: { burst: { x: number; z: number; bornAt: number } 
 
 function popupColor(t: string) {
   switch (t) {
-    case "Yarr":
-      return "#ffd84d";
-    case "Great":
-      return "#7df2a1";
-    case "NotBad":
-      return "#cccccc";
-    default:
-      return "#ff6a6a";
+    case "Yarr":   return "#ffd84d";
+    case "Great":  return "#7df2a1";
+    case "NotBad": return "#cccccc";
+    case "Chomp":  return "#ff8c00";
+    default:       return "#ff6a6a";
   }
+}
+
+// 실제 중력(9.8 m/s²) 기반. age는 0→1 / SPLASH_DUR ms.
+// y = v0 * tSec - 0.5 * 9.8 * tSec²  (tSec = age * SPLASH_DUR/1000)
+const _S = SPLASH_DUR / 1000; // seconds per age-unit
+const DROP_PARAMS = [
+  // 큰 중앙 물방울 — 높이 ~1.4m
+  ...Array.from({ length: 6 }, (_, i) => ({
+    angle: (i / 6) * Math.PI * 2,
+    horiz: 0.7 + i * 0.18,
+    v0: 5.2 + (i % 3) * 0.5,
+    r: 0.10,
+    col: i % 2 === 0 ? "#e8f8ff" : "#aee9ff",
+  })),
+  // 중간 물방울 — 높이 ~0.8m
+  ...Array.from({ length: 10 }, (_, i) => ({
+    angle: (i / 10) * Math.PI * 2 + 0.31,
+    horiz: 1.4 + (i % 4) * 0.4,
+    v0: 3.8 + (i % 4) * 0.4,
+    r: 0.065,
+    col: i % 3 === 0 ? "#ffffff" : i % 3 === 1 ? "#7ecef4" : "#a8d8ea",
+  })),
+  // 잔물결 스프레이 — 넓게 퍼짐
+  ...Array.from({ length: 8 }, (_, i) => ({
+    angle: (i / 8) * Math.PI * 2 + 0.6,
+    horiz: 2.2 + (i % 3) * 0.6,
+    v0: 2.2 + (i % 3) * 0.5,
+    r: 0.038,
+    col: "#b3e8f7",
+  })),
+];
+
+function SplashEffect({ splash }: { splash: { x: number; z: number; bornAt: number } }) {
+  const groupRef = useRef<Group>(null);
+  const flashRef = useRef<Mesh>(null);
+  const flashMatRef = useRef<MeshBasicMaterial>(null);
+  const ringRefs = useRef<(Mesh | null)[]>([]);
+  const ringMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+  const dropRefs = useRef<(Mesh | null)[]>([]);
+  const dropMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+  const NUM_DROPS = DROP_PARAMS.length;
+
+  useFrame(() => {
+    const age = (performance.now() - splash.bornAt) / SPLASH_DUR;
+    const grp = groupRef.current;
+    if (grp) grp.visible = age <= 1.05;
+    if (age > 1.05) return;
+
+    const tSec = age * _S;
+
+    // 임팩트 플래시 (0~0.18 age)
+    if (flashRef.current && flashMatRef.current) {
+      const ft = age / 0.18;
+      flashRef.current.scale.setScalar(1 + ft * 3.5);
+      flashMatRef.current.opacity = Math.max(0, (1 - ft) * 0.88);
+    }
+
+    // 물결 링 (각 링 순차 등장)
+    for (let i = 0; i < SPLASH_RINGS; i++) {
+      const m = ringRefs.current[i];
+      const mat = ringMatRefs.current[i];
+      if (!m || !mat) continue;
+      const delay = i * 0.12;
+      const t = Math.min(1, Math.max(0, age - delay) / (1 - delay));
+      m.scale.setScalar(0.15 + t * (4.5 + i * 1.4));
+      mat.opacity = Math.max(0, (1 - t * t) * (0.7 - i * 0.12));
+    }
+
+    // 물방울 (실제 중력 물리)
+    for (let i = 0; i < NUM_DROPS; i++) {
+      const d = dropRefs.current[i];
+      const mat = dropMatRefs.current[i];
+      if (!d || !mat) continue;
+      const { angle, horiz, v0 } = DROP_PARAMS[i];
+      const y = Math.max(0, v0 * tSec - 4.9 * tSec * tSec);
+      d.position.set(
+        splash.x + Math.cos(angle) * horiz * tSec,
+        y,
+        splash.z + Math.sin(angle) * horiz * tSec,
+      );
+      d.visible = y > 0.015 || age < 0.06;
+      mat.opacity = Math.max(0, 1 - age / 0.85);
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {/* 임팩트 플래시 디스크 */}
+      <mesh
+        ref={flashRef}
+        position={[splash.x, 0.06, splash.z]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <circleGeometry args={[0.45, 24]} />
+        <meshBasicMaterial
+          ref={flashMatRef}
+          color="#ffffff"
+          transparent
+          opacity={0.88}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* 물결 링 */}
+      {Array.from({ length: SPLASH_RINGS }).map((_, i) => (
+        <mesh
+          key={`sr${i}`}
+          ref={(el) => { ringRefs.current[i] = el; }}
+          position={[splash.x, 0.05 + i * 0.01, splash.z]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <ringGeometry args={[0.08, 0.20, 36]} />
+          <meshBasicMaterial
+            ref={(m) => { ringMatRefs.current[i] = m; }}
+            color={i === 0 ? "#d0f4ff" : "#7ecef4"}
+            transparent
+            opacity={0.7}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+
+      {/* 물방울 */}
+      {DROP_PARAMS.map((p, i) => (
+        <mesh
+          key={`sd${i}`}
+          ref={(el) => { dropRefs.current[i] = el; }}
+          position={[splash.x, 0, splash.z]}
+        >
+          <sphereGeometry args={[p.r, 6, 4]} />
+          <meshBasicMaterial
+            ref={(m) => { dropMatRefs.current[i] = m; }}
+            color={p.col}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+const SPIKE_PARAMS = Array.from({ length: CROC_SPIKES }, (_, i) => ({
+  angle: (i / CROC_SPIKES) * Math.PI * 2,
+  maxDist: 1.1 + (i % 3) * 0.3,
+  col: i % 3 === 0 ? "#ff8800" : i % 3 === 1 ? "#ffcc00" : "#ff4400",
+  scaleX: 0.22 + (i % 4) * 0.05,
+}));
+
+function CrocSnapEffect({ snap }: { snap: { x: number; z: number; bornAt: number } }) {
+  const groupRef = useRef<Group>(null);
+  const flashRef = useRef<Mesh>(null);
+  const flashMatRef = useRef<MeshBasicMaterial>(null);
+  const ringRefs = useRef<(Mesh | null)[]>([]);
+  const ringMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+  const spikeRefs = useRef<(Mesh | null)[]>([]);
+  const spikeMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+
+  useFrame(() => {
+    const age = (performance.now() - snap.bornAt) / CROC_DUR;
+    const grp = groupRef.current;
+    if (grp) grp.visible = age <= 1.05;
+    if (age > 1.05) return;
+
+    // 흰 플래시 (0~0.2)
+    if (flashRef.current && flashMatRef.current) {
+      const ft = age / 0.2;
+      flashRef.current.scale.setScalar(1 + ft * 5);
+      flashMatRef.current.opacity = Math.max(0, (1 - ft) * 0.92);
+    }
+
+    // 오렌지 충격파 링
+    for (let i = 0; i < CROC_RINGS; i++) {
+      const m = ringRefs.current[i];
+      const mat = ringMatRefs.current[i];
+      if (!m || !mat) continue;
+      const delay = i * 0.14;
+      const t = Math.min(1, Math.max(0, age - delay) / (1 - delay));
+      m.scale.setScalar(0.15 + t * (5 + i * 1.8));
+      mat.opacity = Math.max(0, (1 - t * t) * 0.72);
+    }
+
+    // 방사형 스파이크
+    for (let i = 0; i < CROC_SPIKES; i++) {
+      const s = spikeRefs.current[i];
+      const mat = spikeMatRefs.current[i];
+      if (!s || !mat) continue;
+      const { angle, maxDist, scaleX } = SPIKE_PARAMS[i];
+      const p = Math.min(1, age / 0.58);
+      const ease = 1 - (1 - p) * (1 - p); // ease-out
+      const dist = ease * maxDist;
+      const y = 0.28 + Math.sin(p * Math.PI) * (0.45 + (i % 3) * 0.12);
+      s.position.set(
+        snap.x + Math.cos(angle) * dist,
+        y,
+        snap.z + Math.sin(angle) * dist,
+      );
+      s.scale.set(scaleX * 2.2, scaleX, scaleX);
+      mat.opacity = Math.max(0, 1 - age / 0.78);
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {/* 임팩트 플래시 */}
+      <mesh
+        ref={flashRef}
+        position={[snap.x, 0.12, snap.z]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <circleGeometry args={[0.5, 16]} />
+        <meshBasicMaterial
+          ref={flashMatRef}
+          color="#ffffff"
+          transparent
+          opacity={0.92}
+          depthWrite={false}
+        />
+      </mesh>
+
+      {/* 충격파 링 */}
+      {Array.from({ length: CROC_RINGS }).map((_, i) => (
+        <mesh
+          key={`cr${i}`}
+          ref={(el) => { ringRefs.current[i] = el; }}
+          position={[snap.x, 0.1 + i * 0.03, snap.z]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <ringGeometry args={[0.08, 0.2, 32]} />
+          <meshBasicMaterial
+            ref={(m) => { ringMatRefs.current[i] = m; }}
+            color={i === 0 ? "#ff8800" : "#ffcc00"}
+            transparent
+            opacity={0.72}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+
+      {/* 방사형 스파이크 */}
+      {SPIKE_PARAMS.map((p, i) => (
+        <mesh
+          key={`cs${i}`}
+          ref={(el) => { spikeRefs.current[i] = el; }}
+          position={[snap.x, 0.28, snap.z]}
+          rotation={[0, -p.angle, Math.PI / 4]}
+        >
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial
+            ref={(m) => { spikeMatRefs.current[i] = m; }}
+            color={p.col}
+            transparent
+            opacity={0.9}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
 }

@@ -10,6 +10,8 @@ interface Props {
   isCharging: boolean;
   isJumping: boolean;
   jumpProgress: number;
+  isDead?: boolean;
+  crocSnap?: { cx: number; cz: number; bornAt: number } | null;
 }
 
 /**
@@ -36,6 +38,8 @@ export default function Frog({
   isCharging,
   isJumping,
   jumpProgress,
+  isDead = false,
+  crocSnap = null,
 }: Props) {
   const ref = useRef<Group>(null);
   const eyeLRef = useRef<Group>(null);
@@ -45,12 +49,65 @@ export default function Frog({
   // 회전 보간 상태
   const currentYaw = useRef(0);
   const currentPitch = useRef(0);
+  // 사망 애니메이션
+  const deathAtRef = useRef<number | null>(null);
+  const wasDeadRef = useRef(false);
+  // 악어 사망 애니메이션
+  const crocAtRef = useRef<number | null>(null);
+  const wasCrocRef = useRef(false);
 
   useFrame(() => {
     if (!ref.current) return;
-    // 개구리의 모델 바닥이 그룹 원점(y=0)에 있지만 연잎 윗면은 약 y=0.18.
-    // 그대로 두면 base 큐브의 절반이 연잎 속에 박혀 보인다 (특히 충전 squash 시).
-    // 그룹 자체를 살짝 들어 올려 연잎 위에 사뿐히 올라간 모양으로 보정.
+
+    // 사망 시 물속으로 빠지는 애니메이션
+    if (isDead) {
+      if (!wasDeadRef.current) {
+        deathAtRef.current = performance.now();
+        wasDeadRef.current = true;
+      }
+      const deadAge = (performance.now() - (deathAtRef.current ?? performance.now())) / 1000;
+      // 0~0.08s: 수면에 찰싹 납작해지고 바로 숨김
+      const squashT = Math.min(1, deadAge / 0.08);
+      const scaleX = 1 + squashT * 0.7;
+      const scaleY = Math.max(0.02, 1 - squashT * 0.95);
+      ref.current.position.set(position.x, 0.22 * (1 - squashT), position.z);
+      ref.current.scale.set(scaleX, scaleY, scaleX);
+      ref.current.visible = deadAge < 0.1;
+      return;
+    }
+    if (wasDeadRef.current) {
+      wasDeadRef.current = false;
+      deathAtRef.current = null;
+      ref.current.visible = true;
+    }
+
+    // 악어에 잡아먹히는 애니메이션 — 악어 쪽으로 빨려들어가며 소멸
+    if (crocSnap) {
+      if (!wasCrocRef.current) {
+        crocAtRef.current = performance.now();
+        wasCrocRef.current = true;
+      }
+      const t = Math.min(1, (performance.now() - (crocAtRef.current ?? performance.now())) / 280);
+      const ease = t * t; // ease-in: 점점 빠르게
+      const dx = crocSnap.cx - position.x;
+      const dz = crocSnap.cz - position.z;
+      const len = Math.hypot(dx, dz) || 1;
+      ref.current.position.set(
+        position.x + (dx / len) * ease * 0.9,
+        0.22 * (1 - ease),
+        position.z + (dz / len) * ease * 0.9,
+      );
+      ref.current.scale.setScalar(Math.max(0, 1 - ease));
+      ref.current.visible = t < 1.0;
+      return;
+    }
+    if (wasCrocRef.current) {
+      wasCrocRef.current = false;
+      crocAtRef.current = null;
+      ref.current.visible = true;
+      ref.current.scale.setScalar(1);
+    }
+
     const Y_LIFT = 0.22;
     ref.current.position.set(position.x, position.y + Y_LIFT, position.z);
 

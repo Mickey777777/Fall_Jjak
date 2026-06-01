@@ -32,7 +32,7 @@ import type {
   JudgmentPopup,
   LilyPadData,
 } from "./types";
-import { playCrocSnap, playCrocWarnIfNeeded, playJudgment, playPlop, playSlurp, playSpring } from "./sound";
+import { playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring } from "./sound";
 // 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
 const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
 
@@ -88,6 +88,8 @@ export default function LilyPadManager({ paused }: Props) {
   const shakeRef = useRef(0);
   const zoomRef = useRef(false);
   const [yarrBurst, setYarrBurst] = useState<{ x: number; z: number; bornAt: number } | null>(null);
+  const [splashAt, setSplashAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
+  const [crocSnapAt, setCrocSnapAt] = useState<{ x: number; z: number; cx: number; cz: number; bornAt: number } | null>(null);
   /** 카메라가 따라가는 "지면" 위치 — 착지할 때만 갱신되어 공중 비행 동안 배경이 흔들리지 않음 */
   const landedPos = useRef({ x: 0, z: 0 });
 
@@ -301,6 +303,9 @@ export default function LilyPadManager({ paused }: Props) {
     const now = performance.now() / 1000;
     const dt = Math.min(0.05, now - lastFrameRef.current);
     lastFrameRef.current = now;
+    // paused 여부와 관계없이 shake는 항상 감쇠
+    shakeRef.current = Math.max(0, shakeRef.current - dt * 3.5);
+
     if (paused) {
       forceRender((x) => x + 1);
       return;
@@ -331,14 +336,27 @@ export default function LilyPadManager({ paused }: Props) {
 
       // 충돌 (지면에 있을 때만)
       if (!jumpPlanRef.current && crocDist < 1.8) {
+        setCrocSnapAt({
+          x: frog.current.x, z: frog.current.z,
+          cx: crocRef.current.x, cz: crocRef.current.z,
+          bornAt: performance.now(),
+        });
+        shakeRef.current = 1.8;
+        addPopup({
+          id: ++popupIdRef.current,
+          type: "Chomp",
+          text: "CHOMP!",
+          position: [frog.current.x, 2.2, frog.current.z],
+          bornAt: performance.now(),
+          score: 0,
+        });
         playCrocSnap();
         finishRun();
         return;
       }
     }
 
-    // 카메라 shake 감쇠
-    shakeRef.current = Math.max(0, shakeRef.current - dt * 2.5);
+    // 카메라 shake 감쇠 (paused 전에도 처리됨)
     if (zoomRef.current && now - (zoomReleaseAt.current ?? 0) > 0.35) {
       zoomRef.current = false;
     }
@@ -375,8 +393,11 @@ export default function LilyPadManager({ paused }: Props) {
       // 공중 충돌 검사
       const hit = checkAirborneHit(s, enemies);
       if (hit) {
-        // 즉시 사망
-        playPlop();
+        const sx = frog.current.x;
+        const sz = frog.current.z;
+        frog.current.y = 0;
+        setSplashAt({ x: sx, z: sz, bornAt: performance.now() });
+        playSplash();
         finishRun();
         jumpPlanRef.current = null;
         return;
@@ -692,7 +713,11 @@ export default function LilyPadManager({ paused }: Props) {
         return;
       }
     }
-    playPlop();
+    frog.current.x = x;
+    frog.current.z = z;
+    frog.current.y = 0;
+    setSplashAt({ x, z, bornAt: performance.now() });
+    playSplash();
     finishRun();
   }
  
@@ -911,6 +936,8 @@ export default function LilyPadManager({ paused }: Props) {
             ? jumpTimeRef.current / jumpPlanRef.current.duration
             : 0
         }
+        isDead={splashAt !== null}
+        crocSnap={crocSnapAt ? { cx: crocSnapAt.cx, cz: crocSnapAt.cz, bornAt: crocSnapAt.bornAt } : null}
       />
       {pads.map((p) => (
         <LilyPad
@@ -937,6 +964,8 @@ export default function LilyPadManager({ paused }: Props) {
         isCharging={chargingRef.current}
         isJumping={!!jumpPlanRef.current}
         yarrBurst={yarrBurst}
+        splashAt={splashAt}
+        crocSnapAt={crocSnapAt}
       />
     </>
   );
