@@ -599,6 +599,19 @@ button.ghost {
   gap: 10px;
   width: 100%;
 }
+.gameover .actions .ghost {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--ink);
+  border: 0;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+}
+.gameover .actions .ghost:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+.gameover .actions .ghost:active {
+  transform: translateY(1px);
+}
 .stat {
   background: rgba(0, 0, 0, 0.04);
   border-radius: 10px;
