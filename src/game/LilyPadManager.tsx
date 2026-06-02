@@ -41,6 +41,8 @@ interface Props {
 }
 // 🧪 디버그: 특정 아이템만 스폰 (테스트 끝나면 null로)
 const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
+// 🧪 디버그: 적(새/물고기) 항상 스폰, obstacle 제외 (테스트 끝나면 false로)
+const DEBUG_ALWAYS_SPAWN_ENEMY = false;
 /**
  * 게임의 메인 시뮬레이션 루프.
  *
@@ -839,8 +841,8 @@ export default function LilyPadManager({ paused }: Props) {
         }
 
         // 적 스폰
-        if (Math.random() < enemyProb(diff)) {
-          const roll = Math.random();
+        if (Math.random() < (DEBUG_ALWAYS_SPAWN_ENEMY ? 1 : enemyProb(diff))) {
+          const roll = DEBUG_ALWAYS_SPAWN_ENEMY ? Math.random() * 0.75 : Math.random();
           const enemy: EnemyData = {
             id: ++enemyIdRef.current,
             type: roll < 0.4 ? "fish" : roll < 0.75 ? "bird" : "obstacle",
