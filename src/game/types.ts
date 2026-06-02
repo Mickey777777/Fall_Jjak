@@ -39,6 +39,8 @@ export interface LilyPadData {
   // 착지 파문 트리거
   rippleAt?: number;
   rotationDirection?: 1 | -1;  // 1 = 반시계, -1 = 시계
+  // 수영 복귀 점멸 연잎: 이 시간부터 줄어들기 시작 (null이면 아직 안정)
+  swimShrinkAt?: number;
 }
 
 export interface EnemyData {

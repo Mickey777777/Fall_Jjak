@@ -10,7 +10,7 @@ import ItemManager from "./ItemManager";
 import WeatherSystem from "./WeatherSystem";
 import EffectsManager from "./EffectsManager";
 import BackgroundDecor from "./BackgroundDecor";
-import CrocEnemy from "./CrocEnemy";
+import CrocEnemy, { SHOW_DIST as CROC_SHOW_DIST, KILL_DIST as CROC_KILL_DIST } from "./CrocEnemy";
 
 import { useGameStore } from "../store/useGameStore";
 import { ENEMY, JUMP, LILY, WORLD, SCORE as SCORECONST } from "./constants";
@@ -41,6 +41,8 @@ interface Props {
 }
 // 🧪 디버그: 특정 아이템만 스폰 (테스트 끝나면 null로)
 const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
+// 🧪 디버그: 적(새/물고기) 항상 스폰, obstacle 제외 (테스트 끝나면 false로)
+const DEBUG_ALWAYS_SPAWN_ENEMY = false;
 /**
  * 게임의 메인 시뮬레이션 루프.
  *
@@ -67,7 +69,7 @@ export default function LilyPadManager({ paused }: Props) {
   const addBuff = useGameStore((s) => s.addBuff);
   const consumeSwimBuff = useGameStore((s) => s.consumeSwimBuff);
   const triggerTongue = useGameStore((s) => s.triggerTongue);
-  const setCrocWarning = useGameStore((s) => s.setCrocWarning);
+  const setCrocDanger = useGameStore((s) => s.setCrocDanger);
 
   // ──────── 시뮬레이션 상태 (ref로 보관해 매 프레임 자유롭게 변경) ────────
   const frog = useRef({ x: 0, y: 0, z: 0 });
@@ -96,7 +98,7 @@ export default function LilyPadManager({ paused }: Props) {
   // 악어 위치 (월드 좌표)
   const crocRef = useRef({ x: -ENEMY.CROC_BASE_DISTANCE, z: 0 });
   // 직전 프레임의 경고 상태 — store 업데이트를 변화 시점에만 호출하기 위해
-  const crocWasWarnRef = useRef(false);
+  const crocDangerRef = useRef(-1); // 마지막으로 store에 쓴 양자화 위험도 (재렌더 최소화)
 
   const slideRef = useRef<{
     vx: number;
@@ -104,6 +106,7 @@ export default function LilyPadManager({ paused }: Props) {
     remaining: number;
     duration: number;
   } | null>(null);
+  const swimStabilizedRef = useRef(new Set<number>());
   const rotatingShiftRef = useRef(0);
   const currentPadRef = useRef<{
     padId: number;
@@ -316,8 +319,8 @@ export default function LilyPadManager({ paused }: Props) {
 
     // ── 악어 이동 및 충돌 ──
     {
-      const diff = difficultyOf(useGameStore.getState().distance);
-      const crocSpeed = ENEMY.CROC_SPEED * (1 + diff * 2);
+      const crocDiff = Math.min(1, useGameStore.getState().score / ENEMY.CROC_SPEED_MAX_SCORE);
+      const crocSpeed = ENEMY.CROC_SPEED + (ENEMY.CROC_SPEED_MAX - ENEMY.CROC_SPEED) * crocDiff; // 1.0 → 2.6 m/s (점수 0→3000)
       crocRef.current.x += crocSpeed * dt;
       // Z 방향으로 개구리를 느리게 추적 (프레임독립적 lerp)
       crocRef.current.z += (frog.current.z - crocRef.current.z) * (1 - Math.exp(-1.2 * dt));
@@ -326,16 +329,20 @@ export default function LilyPadManager({ paused }: Props) {
       const cdz = frog.current.z - crocRef.current.z;
       const crocDist = Math.hypot(cdx, cdz);
 
-      // 경고 (4.5m 이내) — 상태 변화 시에만 store 갱신
-      const nowWarn = crocDist < 4.5;
-      if (nowWarn !== crocWasWarnRef.current) {
-        crocWasWarnRef.current = nowWarn;
-        setCrocWarning(nowWarn);
+      // 경고 (SHOW_DIST=화면 등장 이내) — 거리 비례 위험도 0~1을 양자화해 변할 때만 store 갱신
+      const nowWarn = crocDist < CROC_SHOW_DIST;
+      const rawDanger = nowWarn
+        ? Math.min(1, Math.max(0, (CROC_SHOW_DIST - crocDist) / (CROC_SHOW_DIST - CROC_KILL_DIST)))
+        : 0;
+      const qDanger = Math.round(rawDanger * 25) / 25; // 0.04 단계
+      if (qDanger !== crocDangerRef.current) {
+        crocDangerRef.current = qDanger;
+        setCrocDanger(qDanger);
       }
-      if (nowWarn) playCrocWarnIfNeeded();
+      if (nowWarn) playCrocWarnIfNeeded(crocDist);
 
       // 충돌 (지면에 있을 때만)
-      if (!jumpPlanRef.current && crocDist < 1.8) {
+      if (!jumpPlanRef.current && crocDist < CROC_KILL_DIST) {
         setCrocSnapAt({
           x: frog.current.x, z: frog.current.z,
           cx: crocRef.current.x, cz: crocRef.current.z,
@@ -446,16 +453,35 @@ export default function LilyPadManager({ paused }: Props) {
       // 4. 점멸 연잎 검사 (기존)
       for (const p of pads) {
         if (p.type !== "blinking") continue;
-        if (p.steppedAt != null) continue;
         const dx = p.position[0] - fx;
         const dz = p.position[2] - fz;
-        if (Math.hypot(dx, dz) < p.radius) {
-          const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-          // blinking 꺼진 상태
-          if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
-            handleFall(frog.current.x, frog.current.z, p.id);
-            return;
+        if (Math.hypot(dx, dz) >= p.radius) continue;
+
+        if (swimStabilizedRef.current.has(p.id)) {
+          // 수영 복귀 점멸 연잎: 1초 안정 → 줄어들기 시작 → ROTTEN_LIFETIME 후 붕괴
+          if (p.steppedAt != null) {
+            const elapsed = now - p.steppedAt;
+            if (elapsed >= 1.0 + LILY.ROTTEN_LIFETIME) {
+              handleFall(frog.current.x, frog.current.z, p.id);
+              return;
+            } else if (elapsed >= 1.0 && p.swimShrinkAt == null) {
+              // 줄어들기 시작 타임스탬프 기록
+              setPads((list) =>
+                list.map((pad) =>
+                  pad.id === p.id ? { ...pad, swimShrinkAt: now } : pad,
+                ),
+              );
+            }
           }
+          continue;
+        }
+
+        if (p.steppedAt != null) continue; // 정상 착지로 안정화된 연잎
+        const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+        // blinking 꺼진 상태
+        if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
+          handleFall(frog.current.x, frog.current.z, p.id);
+          return;
         }
       }
 
@@ -593,7 +619,7 @@ export default function LilyPadManager({ paused }: Props) {
       id: ++popupIdRef.current,
       type: j.type,
       text: `${judgmentText(j.type)}  +${gained}`,
-      position: [pad.position[0], 1.5, pad.position[2]],
+      position: [pad.position[0] + 0.7, pad.position[1], pad.position[2]],
       bornAt: performance.now(),
       score: gained,
     });
@@ -618,8 +644,9 @@ export default function LilyPadManager({ paused }: Props) {
         ),
       );
     }
-    // ★ 점멸 연잎도 밟으면 안정화 (steppedAt 기록)
+    // ★ 점멸 연잎도 밟으면 안정화 (steppedAt 기록) — 정상 착지이므로 swim 카운트다운 해제
     if (pad.type === "blinking") {
+      swimStabilizedRef.current.delete(pad.id);
       setPads((list) =>
         list.map((p) =>
           p.id === pad.id
@@ -691,17 +718,113 @@ export default function LilyPadManager({ paused }: Props) {
   function handleFall(x: number, z: number, excludePadId?: number) {
     // 생존 수영 버프 검사
     if (consumeSwimBuff()) {
-      const usable =
-        excludePadId == null ? pads : pads.filter((p) => p.id !== excludePadId);
-      const { pad } = nearestPad(x, z, usable);
+      const nowSec = performance.now() / 1000;
+      const excludedPad = excludePadId != null ? pads.find((p) => p.id === excludePadId) : null;
+      // swim 안정화된 점멸 연잎이 만료되는 경우는 재복귀 허용 안 함 (일반 exclude처럼 처리)
+      const excludeIsBlinking =
+        excludedPad?.type === "blinking" &&
+        !swimStabilizedRef.current.has(excludePadId ?? -1);
+      const excludeIsRotten = excludedPad?.type === "rotten";
+
+      // 복귀 가능 연잎:
+      // - 함정 제외
+      // - 꺼진 점멸 연잎 제외 (단, 지금 밟고 있던 점멸 연잎은 포함 → 강제로 켜줌)
+      // - 비점멸 exclude 연잎 제외
+      const usable = pads.filter((p) => {
+        if (p.type === "trap" || p.type === "spring") return false;
+        if (p.id === excludePadId && !excludeIsBlinking) return false;
+        if (p.type === "blinking" && p.steppedAt == null && !swimStabilizedRef.current.has(p.id)) {
+          const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+          if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
+        }
+        return true;
+      });
+
+      // 이동 연잎은 현재 시각 위치로 보정해서 nearestPad에 전달
+      const usableWithVisual = usable.map((p) => {
+        if (p.type !== "moving") return p;
+        const t = nowSec - p.spawnTime;
+        const amp = p.amplitude ?? 1.4;
+        const freq = p.frequency ?? 0.8;
+        const offset = Math.sin(t * freq) * amp;
+        const newPos: [number, number, number] =
+          p.axis === "x"
+            ? [p.position[0] + offset, p.position[1], p.position[2]]
+            : [p.position[0], p.position[1], p.position[2] + offset];
+        return { ...p, position: newPos };
+      });
+
+      // 이동 연잎: 현재 시각 위치에서 radius*2 이상 멀면 복귀 불가 (이동 반경 전체가 발동 범위가 되는 것 방지)
+      const swimCandidates = usableWithVisual.filter((p) => {
+        if (p.type !== "moving") return true;
+        return Math.hypot(p.position[0] - x, p.position[2] - z) <= p.radius * 2;
+      });
+
+      // 삭은 연잎 만료 시: 앞쪽 연잎으로만 복귀 (뒤로 가면 후반에 거리가 줄어 게임 진행 불가)
+      const finalCandidates = excludeIsRotten
+        ? swimCandidates.filter((p) => p.position[0] >= x - 0.1)
+        : swimCandidates;
+
+      const { pad } = nearestPad(x, z, finalCandidates);
       if (pad) {
         frog.current.x = pad.position[0];
         frog.current.z = pad.position[2];
         frog.current.y = 0;
         landedPos.current.x = pad.position[0];
         landedPos.current.z = pad.position[2];
-        slideRef.current = null;       // ★ 잔여 슬라이드 제거 (복귀 직후 또 미끄러져 죽는 것 방지)
-        currentPadRef.current = null;  // ★ 이동 연잎 추적 해제
+        slideRef.current = null;
+
+        // 이동 연잎이면 추적 재개 (복귀 위치 = 시각 위치이므로 offset = 0)
+        const origPad = pads.find((p) => p.id === pad.id);
+        if (origPad?.type === "moving") {
+          currentPadRef.current = { padId: pad.id, offsetX: 0, offsetZ: 0 };
+        } else {
+          currentPadRef.current = null;
+        }
+
+        // 특수 연잎 효과 적용 (landFrog 착지와 동일한 처리)
+        if (pad.type === "blinking") {
+          // 점멸 연잎: 즉시 안정화 (stale state 방지 ref도 업데이트)
+          swimStabilizedRef.current.add(pad.id);
+          setPads((list) =>
+            list.map((p) => p.id === pad.id ? { ...p, steppedAt: nowSec } : p),
+          );
+        } else if (pad.type === "rotten") {
+          // 삭은 연잎: steppedAt 설정해 타이머 시작 (1.2초 내 탈출 필요)
+          setPads((list) =>
+            list.map((p) => p.id === pad.id ? { ...p, steppedAt: nowSec } : p),
+          );
+        } else if (pad.type === "slippery") {
+          // 미끄러운 연잎: 모멘텀 없는 최소 슬라이드
+          const slideDist = pad.radius * 0.25;
+          const SLIDE_DURATION = 0.85;
+          const speed = (2.5 * slideDist) / SLIDE_DURATION;
+          slideRef.current = {
+            vx: Math.cos(aimDirRef.current) * speed,
+            vz: Math.sin(aimDirRef.current) * speed,
+            remaining: SLIDE_DURATION,
+            duration: SLIDE_DURATION,
+          };
+        } else if (pad.type === "rotating") {
+          // 회전 연잎: 다음 점프 방향 편향 적용
+          const dir = origPad?.rotationDirection ?? 1;
+          rotatingShiftRef.current = -dir * 0.1;
+        } else if (pad.type === "spring") {
+          // 스프링 연잎: 기본 거리로 즉시 점프 발사
+          playSpring();
+          const bigPlan = makeJumpPlan(
+            frog.current.x,
+            frog.current.z,
+            aimDirRef.current,
+            JUMP.MIN_DISTANCE * 1.5,
+            Math.max(arcHeightRef.current, 3.5),
+            useGameStore.getState().wind,
+          );
+          jumpPlanRef.current = bigPlan;
+          jumpTimeRef.current = 0;
+          currentPadRef.current = null;
+        }
+
         addPopup({
           id: ++popupIdRef.current,
           type: "Great",
@@ -839,8 +962,8 @@ export default function LilyPadManager({ paused }: Props) {
         }
 
         // 적 스폰
-        if (Math.random() < enemyProb(diff)) {
-          const roll = Math.random();
+        if (Math.random() < (DEBUG_ALWAYS_SPAWN_ENEMY ? 1 : enemyProb(diff))) {
+          const roll = DEBUG_ALWAYS_SPAWN_ENEMY ? Math.random() * 0.75 : Math.random();
           const enemy: EnemyData = {
             id: ++enemyIdRef.current,
             type: roll < 0.4 ? "fish" : roll < 0.75 ? "bird" : "obstacle",
@@ -945,6 +1068,7 @@ export default function LilyPadManager({ paused }: Props) {
           pad={p}
           now={performance.now() / 1000}
           isCandidate={p.id === candidatePadId}
+          crocRef={crocRef}
         />
       ))}
       <EnemyManager enemies={enemies} now={performance.now() / 1000} />
@@ -952,7 +1076,8 @@ export default function LilyPadManager({ paused }: Props) {
         x={crocRef.current.x}
         z={crocRef.current.z}
         now={performance.now() / 1000}
-        danger={crocWasWarnRef.current}
+        dist={Math.hypot(frog.current.x - crocRef.current.x, frog.current.z - crocRef.current.z)}
+        caught={!!crocSnapAt}
       />
       <ItemManager items={items} now={performance.now() / 1000} />
       <EffectsManager

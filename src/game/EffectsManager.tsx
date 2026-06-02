@@ -124,7 +124,7 @@ export default function EffectsManager({
       {/* 판정 popup */}
       {popups.map((p) => {
         const age = (performance.now() - p.bornAt) / 900;
-        const y = 0.95;
+        const y = 0.35;
         const opacity = Math.max(0, 1 - age);
         const popScale = popupPopScale(p.type, age);
         return (
@@ -210,21 +210,12 @@ function createPopupTexture(text: string, color: string) {
     ctx.font = '900 44px "Galmuri11", "Press Start 2P", "DungGeunMo", sans-serif';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.lineJoin = "round";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.42)";
-    ctx.shadowBlur = 9;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 4;
-    ctx.lineWidth = 10;
-    ctx.strokeStyle = "rgba(11, 29, 25, 0.95)";
-    ctx.strokeText(text, cx, cy);
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.strokeText(text, cx, cy);
+
+    // pixel-art drop shadow — hard offset, no blur
+    ctx.fillStyle = "rgba(18, 10, 6, 0.65)";
+    ctx.fillText(text, cx + 3, cy + 4);
+
+    // main text
     ctx.fillStyle = color;
     ctx.fillText(text, cx, cy);
   }

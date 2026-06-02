@@ -66,15 +66,19 @@ export const LILY = {
 // ──────────────────────────────────────────────
 export const SCORE = {
   YARR: 30,
-  GREAT: 20,
-  NOT_BAD: 10,
+  GREAT: 25,
+  NOT_BAD: 15,
   // 콤보 배율 단계
   COMBO_TIERS: [
     { combo: 0, mult: 1.0 },
-    { combo: 5, mult: 1.5 },
-    { combo: 10, mult: 2.0 },
-    { combo: 20, mult: 3.0 },
-    { combo: 40, mult: 4.0 },
+    { combo: 5, mult: 1.2 },
+    { combo: 10, mult: 1.4 },
+    { combo: 15, mult: 1.6 },
+    { combo: 20, mult: 1.8 },
+    { combo: 25, mult: 2.0 },
+    { combo: 30, mult: 2.2 },
+    { combo: 35, mult: 2.4 },
+    { combo: 40, mult: 2.6 },
   ],
   FLY_BONUS: 50,
 };
@@ -105,7 +109,9 @@ export const ENEMY = {
   FISH_LUNGE_HEIGHT: 1.6, // 이보다 낮게 날면 잡힘
   BIRD_DIVE_HEIGHT: 2.6, // 이보다 높게 날면 잡힘
   CROC_BASE_DISTANCE: 9, // 개구리 뒤 N미터에서 시작
-  CROC_SPEED: 0.80, // m/s 추가 속도 (난이도 0 기준)
+  CROC_SPEED: 1.00, // m/s 기본 속도 (점수 0 기준). 초반은 넉넉, 머뭇대면 가끔 등장
+  CROC_SPEED_MAX: 2.60, // m/s 최대 속도 (CROC_SPEED_MAX_SCORE 도달 시)
+  CROC_SPEED_MAX_SCORE: 3000, // 이 점수에서 악어 속도가 CROC_SPEED_MAX에 도달
 };
 
 // ──────────────────────────────────────────────
@@ -146,7 +152,7 @@ export const COLORS = {
   // 적/아이템
   FLY: "#202020",
   FISH: "#5a8eab",
-  BIRD: "#9a78c8",
+  BIRD: "#604224",
   CROC: "#3e572a",
 };
 
