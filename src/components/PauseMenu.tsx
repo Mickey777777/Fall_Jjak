@@ -20,8 +20,14 @@ export default function PauseMenu() {
         >
           다시하기
         </button>
-        <button className="ghost restart" onClick={() => setPhase("menu")}>
-          메인으로
+        <button
+          className="ghost"
+          onClick={() => {
+            resetRun();
+            setPhase("menu");
+          }}
+        >
+          타이틀로
         </button>
       </div>
     </div>

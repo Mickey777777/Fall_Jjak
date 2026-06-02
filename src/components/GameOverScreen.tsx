@@ -44,7 +44,7 @@ export default function GameOverScreen() {
               setPhase("playing");
             }}
           >
-            Retry
+            재시도
           </button>
           <button
             className="ghost"
@@ -53,7 +53,7 @@ export default function GameOverScreen() {
               setPhase("menu");
             }}
           >
-            Home
+            타이틀
           </button>
         </div>
       </div>

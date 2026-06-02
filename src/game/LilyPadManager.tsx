@@ -29,7 +29,6 @@ import { comboMultiplier, judgeLanding, judgmentText } from "./ScoreSystem";
 import type {
   EnemyData,
   ItemData,
-  JudgmentPopup,
   LilyPadData,
 } from "./types";
 import { playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring } from "./sound";
@@ -92,8 +91,6 @@ export default function LilyPadManager({ paused }: Props) {
   const [yarrBurst, setYarrBurst] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [splashAt, setSplashAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [crocSnapAt, setCrocSnapAt] = useState<{ x: number; z: number; cx: number; cz: number; bornAt: number } | null>(null);
-  /** 카메라가 따라가는 "지면" 위치 — 착지할 때만 갱신되어 공중 비행 동안 배경이 흔들리지 않음 */
-  const landedPos = useRef({ x: 0, z: 0 });
 
   // 악어 위치 (월드 좌표)
   const crocRef = useRef({ x: -ENEMY.CROC_BASE_DISTANCE, z: 0 });
@@ -136,14 +133,28 @@ export default function LilyPadManager({ paused }: Props) {
   useEffect(() => {
     const canvas = gl.domElement;
 
-    const onMouseMove = (e: MouseEvent) => {
+    // 화면 좌표 → 개구리 기준 조준 방향(±70° 제한)으로 갱신.
+    // 빠른 클릭으로 mousemove가 누락되거나 점프 비행 중 갱신이 막혀도
+    // 조준이 최신이 되도록, 충전 시작(mousedown) 때도 호출한다.
+    const updateAimFromClient = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
-      mouseNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouseNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouseNdc, camera);
       raycaster.ray.intersectPlane(aimPlane, tmpVec);
       cursorWorld.current.copy(tmpVec);
+      // 조준 방향: 개구리 → 커서 (단, X+ 방향에 한해 ±70도로 제한)
+      const dx = cursorWorld.current.x - frog.current.x;
+      const dz = cursorWorld.current.z - frog.current.z;
+      let dir = Math.atan2(dz, dx);
+      const limit = (Math.PI / 180) * 70;
+      if (dir > limit) dir = limit;
+      if (dir < -limit) dir = -limit;
+      aimDirRef.current = dir;
+      setAim(dir);
+    };
 
+    const onMouseMove = (e: MouseEvent) => {
       // 충전 중이면 드래그 거리 = 화면상 우클릭 시작점에서의 거리
       if (chargingRef.current && chargeStartPx.current) {
         const dx = e.clientX - chargeStartPx.current.x;
@@ -153,16 +164,7 @@ export default function LilyPadManager({ paused }: Props) {
         chargeDistanceRef.current = dist;
         setChargeDistance(dist);
       } else if (!jumpPlanRef.current) {
-        // 조준 방향: 개구리 → 커서 (단, X+ 방향에 한해 ±70도로 제한)
-        const dx = cursorWorld.current.x - frog.current.x;
-        const dz = cursorWorld.current.z - frog.current.z;
-        let dir = Math.atan2(dz, dx);
-        // X+(=0 rad) 기준 ±70° 제한
-        const limit = (Math.PI / 180) * 70;
-        if (dir > limit) dir = limit;
-        if (dir < -limit) dir = -limit;
-        aimDirRef.current = dir;
-        setAim(dir);
+        updateAimFromClient(e.clientX, e.clientY);
       }
     };
 
@@ -171,6 +173,8 @@ export default function LilyPadManager({ paused }: Props) {
       if (e.button === 2) {
         // 우클릭: 충전 시작
         if (jumpPlanRef.current) return;
+        // 빠른 클릭 대비 — 누른 위치로 조준을 즉시 갱신 (mousemove 누락/비행 중 미갱신 보정)
+        updateAimFromClient(e.clientX, e.clientY);
         chargingRef.current = true;
         chargeStartPx.current = { x: e.clientX, y: e.clientY };
         chargeDistanceRef.current = JUMP.MIN_DISTANCE;
@@ -201,14 +205,14 @@ export default function LilyPadManager({ paused }: Props) {
             if (d < 0.7 && fd < 3.2) {
               collected = true;
               incrementFlies();
-              addScore(SCORECONST.FLY_BONUS, "Great");
+              const gained = addScore(SCORECONST.FLY_BONUS, "Great");
               addPopup({
                 id: ++popupIdRef.current,
                 type: "Great",
-                text: `+${SCORECONST.FLY_BONUS} 낼름!`,
+                text: `+${gained} 낼름!`,
                 position: [it.position[0], 2.0, it.position[2]],
                 bornAt: performance.now(),
-                score: SCORECONST.FLY_BONUS,
+                score: gained,
               });
               if (it.type === "swim") addBuff({ type: "swim", remaining: 9999 });
               if (it.type === "rangeUp")
@@ -368,9 +372,10 @@ export default function LilyPadManager({ paused }: Props) {
       zoomRef.current = false;
     }
 
-    // 날씨 타이머
+    // 날씨 타이머 — 단, 드래그(충전)로 점프를 조준 중일 땐 날씨 변경을 미룬다.
+    // 이미 점프를 결정한 상태에서 바람 등이 바뀌면 불공평하게 작용하기 때문.
     weatherTimer.current += dt;
-    if (weatherTimer.current >= nextWeatherIn.current) {
+    if (weatherTimer.current >= nextWeatherIn.current && !chargingRef.current) {
       const current = useGameStore.getState().weather;
       const next = pickWeather(current, Math.random);
       const wind =
@@ -398,7 +403,7 @@ export default function LilyPadManager({ paused }: Props) {
       frog.current.z = s.z;
 
       // 공중 충돌 검사
-      const hit = checkAirborneHit(s, enemies);
+      const hit = checkAirborneHit(s, enemies, now);
       if (hit) {
         const sx = frog.current.x;
         const sz = frog.current.z;
@@ -491,8 +496,16 @@ export default function LilyPadManager({ paused }: Props) {
         const linear = Math.max(0, s.remaining / s.duration);
         const ratio = Math.pow(linear, 1.5);
         const step = Math.min(s.remaining, dt);
-        frog.current.x += s.vx * step * ratio;
-        frog.current.z += s.vz * step * ratio;
+        const dx = s.vx * step * ratio;
+        const dz = s.vz * step * ratio;
+        frog.current.x += dx;
+        frog.current.z += dz;
+        // 이동 연잎 위에서는 추적 로직이 매 프레임 frog 위치를 연잎 기준으로
+        // 덮어쓰므로, 미끄러짐이 지워지지 않도록 연잎 기준 오프셋에도 누적한다.
+        if (currentPadRef.current) {
+          currentPadRef.current.offsetX += dx;
+          currentPadRef.current.offsetZ += dz;
+        }
         s.remaining -= dt;
         if (s.remaining <= 0) slideRef.current = null;
       }
@@ -554,45 +567,36 @@ export default function LilyPadManager({ paused }: Props) {
       return { ...p, position: newPos };
     });
 
-    const safePads = padsForCollision.filter((p) => {
-      if (p.type === "trap") return false;
-      if (p.type === "blinking" && p.steppedAt == null) {
-        const cycle = ((performance.now() / 1000 - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-        if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;  // 꺼진 상태
+    // 점멸 연잎이 지금 켜져(밟을 수 있게) 보이는 상태인지
+    const blinkVisible = (p: LilyPadData) => {
+      if (p.type !== "blinking" || p.steppedAt != null) return true;
+      const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+      return cycle < LILY.BLINK_VISIBLE_RATIO;
+    };
+    const isSafe = (p: LilyPadData) => p.type !== "trap" && blinkVisible(p);
+
+    // 착지점을 실제로 덮는(dist < radius) 안전 연잎 중 중심에 가장 가까운 것을 고른다.
+    // 생존 검사(onPad)와 동일한 기준이라 "점수 획득 ⟺ 연잎 위 ⟺ 생존"이 보장된다.
+    // (중심거리만 보는 nearestPad는 겹친 연잎에서 올라탄 연잎을 놓칠 수 있어 쓰지 않는다.)
+    let pad: LilyPadData | null = null;
+    let dist = Infinity;
+    for (const p of padsForCollision) {
+      if (p.destroyed || !isSafe(p)) continue;
+      const d = Math.hypot(p.position[0] - lx, p.position[2] - lz);
+      if (d < p.radius && d < dist) {
+        dist = d;
+        pad = p;
       }
-      return true;
-    });
-
-    // 1차: 안전한 연잎 중에서 가장 가까운 것 찾기
-    let { pad, dist } = nearestPad(lx, lz, safePads);
-
-    // 안전한 연잎이 멀거나 없으면 — trap 포함 전체에서 다시
-    if (!pad || Math.hypot(pad.position[0] - lx, pad.position[2] - lz) > pad.radius) {
-      const result = nearestPad(lx, lz, padsForCollision);
-      pad = result.pad;
-      dist = result.dist;
     }
 
+    // 덮는 안전 연잎이 없으면 사망 (물 / 함정 / 꺼진 점멸 모두 동일 처리)
     if (!pad) {
       handleFall(lx, lz);
       return;
     }
-    // 함정 연잎이면 즉시 사망
-    if (pad.type === "trap") {
-      handleFall(lx, lz);
-      return;
-    }
-    // 점멸 연잎 비활성화 상태에서 밟으면 사망
-    if (pad.type === "blinking" && pad.steppedAt == null) {
-      const cycle =
-        ((performance.now() / 1000 - pad.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-      if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
-        handleFall(lx, lz);
-        return;
-      }
-    }
-    // 판정
-    const j = judgeLanding(dist);
+
+    // 판정 (덮는 안전 연잎이므로 Miss는 나오지 않지만, 점수 tier 계산을 위해 호출)
+    const j = judgeLanding(dist, pad.radius);
     if (j.type === "Miss") {
       handleFall(lx, lz);
       return;
@@ -603,10 +607,6 @@ export default function LilyPadManager({ paused }: Props) {
     const raw = Math.round(j.baseScore * mult);
     const gained = addScore(raw, j.type);
     incrementPads();
-
-    // 카메라가 따라갈 지면 위치 갱신 — 이제부터 카메라가 새 자리로 부드럽게 미끄러진다
-    landedPos.current.x = lx;
-    landedPos.current.z = lz;
 
     // 착지 연잎에 파문 트리거
     setPads((list) =>
@@ -770,8 +770,6 @@ export default function LilyPadManager({ paused }: Props) {
         frog.current.x = pad.position[0];
         frog.current.z = pad.position[2];
         frog.current.y = 0;
-        landedPos.current.x = pad.position[0];
-        landedPos.current.z = pad.position[2];
         slideRef.current = null;
 
         // 이동 연잎이면 추적 재개 (복귀 위치 = 시각 위치이므로 offset = 0)
@@ -952,7 +950,7 @@ export default function LilyPadManager({ paused }: Props) {
           
           kept.push({
             id: ++padIdRef.current,
-            type: "basic",
+            type: branchType,
             position: [bx, WORLD.PAD_TOP_Y, bz],
             radius: LILY.RADIUS * sizeFactor * (0.7 + Math.random() * 0.3),
             spawnTime: performance.now() / 1000,

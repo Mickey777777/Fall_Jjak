@@ -2,6 +2,7 @@ import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import type { Group } from "three";
 import { COLORS } from "./constants";
+import { birdLiveZ } from "./CollisionSystem";
 import type { EnemyData } from "./types";
 
 // 물고기 체절별 굽힘 위상/각도 (머리→꼬리)
@@ -44,9 +45,8 @@ function EnemyView({ enemy, now }: { enemy: EnemyData; now: number }) {
         if (seg) seg.rotation.y = Math.sin(t * 3.5 - FISH_SEG_PHASE[i]) * FISH_SEG_ANGLE[i];
       }
     } else if (enemy.type === "bird") {
-      // 좌우 패트롤
-      const amp = enemy.amplitude ?? 1.5;
-      ref.current.position.z = enemy.position[2] + Math.sin(t * 1.1) * amp;
+      // 좌우 패트롤 — 충돌 판정과 동일한 공식(birdLiveZ) 공유
+      ref.current.position.z = birdLiveZ(enemy, now);
       ref.current.position.y = enemy.position[1] + Math.cos(t * 1.3) * 0.2;
       // 기본적으로 개구리(-x) 쪽을 바라보게 하고, 패트롤 시 좌우로 살짝 틂
       ref.current.rotation.y = Math.PI + Math.sin(t * 1.1) * 0.4;
