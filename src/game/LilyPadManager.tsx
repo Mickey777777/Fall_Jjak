@@ -365,9 +365,10 @@ export default function LilyPadManager({ paused }: Props) {
       zoomRef.current = false;
     }
 
-    // 날씨 타이머
+    // 날씨 타이머 — 단, 드래그(충전)로 점프를 조준 중일 땐 날씨 변경을 미룬다.
+    // 이미 점프를 결정한 상태에서 바람 등이 바뀌면 불공평하게 작용하기 때문.
     weatherTimer.current += dt;
-    if (weatherTimer.current >= nextWeatherIn.current) {
+    if (weatherTimer.current >= nextWeatherIn.current && !chargingRef.current) {
       const current = useGameStore.getState().weather;
       const next = pickWeather(current, Math.random);
       const wind =
