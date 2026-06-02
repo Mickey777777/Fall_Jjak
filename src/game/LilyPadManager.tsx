@@ -551,45 +551,36 @@ export default function LilyPadManager({ paused }: Props) {
       return { ...p, position: newPos };
     });
 
-    const safePads = padsForCollision.filter((p) => {
-      if (p.type === "trap") return false;
-      if (p.type === "blinking" && p.steppedAt == null) {
-        const cycle = ((performance.now() / 1000 - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-        if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;  // 꺼진 상태
+    // 점멸 연잎이 지금 켜져(밟을 수 있게) 보이는 상태인지
+    const blinkVisible = (p: LilyPadData) => {
+      if (p.type !== "blinking" || p.steppedAt != null) return true;
+      const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+      return cycle < LILY.BLINK_VISIBLE_RATIO;
+    };
+    const isSafe = (p: LilyPadData) => p.type !== "trap" && blinkVisible(p);
+
+    // 착지점을 실제로 덮는(dist < radius) 안전 연잎 중 중심에 가장 가까운 것을 고른다.
+    // 생존 검사(onPad)와 동일한 기준이라 "점수 획득 ⟺ 연잎 위 ⟺ 생존"이 보장된다.
+    // (중심거리만 보는 nearestPad는 겹친 연잎에서 올라탄 연잎을 놓칠 수 있어 쓰지 않는다.)
+    let pad: LilyPadData | null = null;
+    let dist = Infinity;
+    for (const p of padsForCollision) {
+      if (p.destroyed || !isSafe(p)) continue;
+      const d = Math.hypot(p.position[0] - lx, p.position[2] - lz);
+      if (d < p.radius && d < dist) {
+        dist = d;
+        pad = p;
       }
-      return true;
-    });
-
-    // 1차: 안전한 연잎 중에서 가장 가까운 것 찾기
-    let { pad, dist } = nearestPad(lx, lz, safePads);
-
-    // 안전한 연잎이 멀거나 없으면 — trap 포함 전체에서 다시
-    if (!pad || Math.hypot(pad.position[0] - lx, pad.position[2] - lz) > pad.radius) {
-      const result = nearestPad(lx, lz, padsForCollision);
-      pad = result.pad;
-      dist = result.dist;
     }
 
+    // 덮는 안전 연잎이 없으면 사망 (물 / 함정 / 꺼진 점멸 모두 동일 처리)
     if (!pad) {
       handleFall(lx, lz);
       return;
     }
-    // 함정 연잎이면 즉시 사망
-    if (pad.type === "trap") {
-      handleFall(lx, lz);
-      return;
-    }
-    // 점멸 연잎 비활성화 상태에서 밟으면 사망
-    if (pad.type === "blinking" && pad.steppedAt == null) {
-      const cycle =
-        ((performance.now() / 1000 - pad.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-      if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
-        handleFall(lx, lz);
-        return;
-      }
-    }
-    // 판정
-    const j = judgeLanding(dist);
+
+    // 판정 (덮는 안전 연잎이므로 Miss는 나오지 않지만, 점수 tier 계산을 위해 호출)
+    const j = judgeLanding(dist, pad.radius);
     if (j.type === "Miss") {
       handleFall(lx, lz);
       return;
