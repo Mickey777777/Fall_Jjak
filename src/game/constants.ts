@@ -14,6 +14,10 @@ export const WORLD = {
   // 카메라 오프셋 (개구리 기준 상대 위치) — 더 가깝게 당겨 화면을 꽉 채움
   CAMERA_OFFSET: [-8, 10, -8] as [number, number, number],
   CAMERA_LOOK_AHEAD: 4.5,
+  // 카메라 세로 FOV(도). 가로 화면(비율≥1)에서 쓰는 기본값.
+  CAMERA_FOV: 45,
+  // 세로 모드에서 가로 시야를 넓히려 FOV를 키울 때 허용하는 상한(도).
+  CAMERA_FOV_MAX: 60,
   // 연잎이 떠 있는 수면 높이
   WATER_Y: 0,
   // 연잎 윗면 높이 (착지 평면)

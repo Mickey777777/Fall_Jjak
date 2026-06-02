@@ -4,16 +4,25 @@ import { comboMultiplier } from "../game/ScoreSystem";
 import { JUMP } from "../game/constants";
 import type { BuffType, WeatherType } from "../game/types";
 import {
+  ChevronDown,
+  ChevronUp,
   Cloud,
   CloudFog,
   CloudRain,
   Gauge,
+  Pause,
   Star,
   Volume2,
   VolumeX,
   Waves,
   Wind,
 } from "lucide-react";
+import { IS_TOUCH } from "../game/device";
+
+/** 모바일 ▲/▼ 버튼 → LilyPadManager의 궤적 조절 로직 구동 */
+function dispatchArc(dir: 1 | -1) {
+  window.dispatchEvent(new CustomEvent("fj:arc", { detail: dir }));
+}
 
 /**
  * 간소화된 HUD — 큰 점수 + 콤보 칩 + 가벼운 충전 바.
@@ -31,6 +40,7 @@ export default function HUD() {
   const muted = useGameStore((s) => s.muted);
   const toggleMute = useGameStore((s) => s.toggleMute);
   const crocDanger = useGameStore((s) => s.crocDanger);
+  const setPhase = useGameStore((s) => s.setPhase);
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -122,13 +132,42 @@ export default function HUD() {
             style={{ width: `${chargeRatio * 100}%`, opacity: isCharging ? 1 : 0.35 }}
           />
         </div>
-        <div className="charge-hint">{isCharging ? "Release!" : "Right-click hold"}</div>
+        <div className="charge-hint">
+          {isCharging
+            ? IS_TOUCH
+              ? "놓아서 점프!"
+              : "Release!"
+            : IS_TOUCH
+              ? "끌어서 충전 · 탭으로 사냥"
+              : "Right-click hold"}
+        </div>
       </div>
 
-      {/* 우상단 끝 — 음소거 + ESC 힌트 */}
+      {/* 우상단 끝 — 음소거 */}
       <button className="mute-btn" onClick={toggleMute} title="음소거">
         {muted ? <VolumeX /> : <Volume2 />}
       </button>
+
+      {/* 모바일 전용 가상 버튼 — 키보드/ESC 대체 */}
+      {IS_TOUCH && (
+        <>
+          <button
+            className="pause-btn"
+            onClick={() => setPhase("paused")}
+            title="일시정지"
+          >
+            <Pause />
+          </button>
+          <div className="arc-buttons">
+            <button onClick={() => dispatchArc(1)} title="궤적 높이기">
+              <ChevronUp />
+            </button>
+            <button onClick={() => dispatchArc(-1)} title="궤적 낮추기">
+              <ChevronDown />
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
