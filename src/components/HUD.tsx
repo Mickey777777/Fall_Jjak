@@ -30,7 +30,7 @@ export default function HUD() {
   const weather = useGameStore((s) => s.weather);
   const muted = useGameStore((s) => s.muted);
   const toggleMute = useGameStore((s) => s.toggleMute);
-  const crocWarning = useGameStore((s) => s.crocWarning);
+  const crocDanger = useGameStore((s) => s.crocDanger);
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -52,8 +52,27 @@ export default function HUD() {
 
   return (
     <div className="hud" onContextMenu={(e) => e.preventDefault()}>
-      {crocWarning && <div className="croc-danger-vignette" />}
-      {crocWarning && <div className="croc-warning-text">🐊 악어!</div>}
+      {crocDanger > 0 && (
+        <>
+          <div
+            className="croc-danger-vignette"
+            style={{
+              ["--danger" as string]: crocDanger,
+              // 멀면 0.7s → 가까우면 0.25s로 깜빡임 가속
+              animationDuration: `${(0.7 - crocDanger * 0.45).toFixed(3)}s`,
+            }}
+          />
+          <div
+            className="croc-warning-text"
+            style={{
+              ["--danger" as string]: crocDanger,
+              animationDuration: `${(0.7 - crocDanger * 0.45).toFixed(3)}s`,
+            }}
+          >
+            악어!
+          </div>
+        </>
+      )}
       {/* 좌상단 — 큰 점수 (라벨 없음, 그림자 텍스트만) */}
       <div className="score-big">
         <div className="score-num">{score.toLocaleString()}</div>
