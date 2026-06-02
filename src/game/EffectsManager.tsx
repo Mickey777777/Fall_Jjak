@@ -68,9 +68,11 @@ export default function EffectsManager({
       rangeBuff && rangeBuff.remaining < 2
         ? Math.sin(performance.now() * 0.02) > 0
         : false;
-    const d =
-      Math.max(JUMP.MIN_DISTANCE, Math.min(JUMP.MAX_DISTANCE, chargeDist)) *
-      rangeBonus;
+    // rangeUp은 최댓값만 확장 — 최솟값은 그대로
+    const d = Math.max(
+      JUMP.MIN_DISTANCE,
+      Math.min(JUMP.MAX_DISTANCE * rangeBonus, chargeDist),
+    );
     const dirX = Math.cos(aimDir);
     const dirZ = Math.sin(aimDir);
 

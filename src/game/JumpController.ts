@@ -57,9 +57,9 @@ export function sampleJump(plan: JumpPlan, t: number): {
   return { x, y, z };
 }
 
-/** 충전(드래그) 픽셀 → 점프 거리 변환 */
-export function pixelsToDistance(px: number): number {
+/** 충전(드래그) 픽셀 → 점프 거리 변환 (rangeUp 등으로 최댓값만 확장 가능) */
+export function pixelsToDistance(px: number, maxDistance: number = JUMP.MAX_DISTANCE): number {
   const safePx = Math.max(0, px);  // 음수 방어
   const raw = JUMP.MIN_DISTANCE + safePx / JUMP.CHARGE_PIXELS_PER_METER;
-  return Math.min(JUMP.MAX_DISTANCE, raw);
+  return Math.min(maxDistance, raw);
 }

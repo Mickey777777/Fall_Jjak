@@ -51,6 +51,8 @@ interface GameState {
   isCharging: boolean;
   // 혀 낼름 애니메이션 (좌클릭 순간)
   tongueAt: number; // performance.now()
+  // 파리를 잡았을 때 그 월드 좌표 — 혀가 여기까지 뻗음. null이면 기본 짧은 낼름
+  tongueTarget: [number, number, number] | null;
   // 환경
   weather: WeatherType;
   wind: WindState;
@@ -70,7 +72,7 @@ interface GameState {
   setChargeDistance: (d: number) => void;
   setArcHeight: (h: number) => void;
   setCharging: (c: boolean) => void;
-  triggerTongue: () => void;
+  triggerTongue: (target?: [number, number, number] | null) => void;
   setWeather: (w: WeatherType, wind?: WindState) => void;
   addBuff: (b: ActiveBuff) => void;
   tickBuffs: (dt: number) => void;
@@ -100,6 +102,7 @@ const initialRunState = {
   arcHeight: 2.2,
   isCharging: false,
   tongueAt: 0,
+  tongueTarget: null as [number, number, number] | null,
   weather: "clear" as WeatherType,
   wind: { direction: 0, strength: 0 } as WindState,
   buffs: [] as ActiveBuff[],
@@ -157,7 +160,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setChargeDistance: (d) => set({ chargeDistance: d }),
   setArcHeight: (h) => set({ arcHeight: h }),
   setCharging: (c) => set({ isCharging: c }),
-  triggerTongue: () => set({ tongueAt: performance.now() }),
+  triggerTongue: (target = null) => set({ tongueAt: performance.now(), tongueTarget: target }),
 
   setWeather: (w, wind) =>
     set({
