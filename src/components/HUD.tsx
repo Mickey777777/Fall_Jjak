@@ -134,7 +134,9 @@ export default function HUD() {
         </div>
         <div className="charge-hint">
           {isCharging
-            ? "놓아서 점프!"
+            ? IS_TOUCH
+              ? "놓아서 점프!"
+              : "Release!"
             : IS_TOUCH
               ? "끌어서 충전 · 탭으로 사냥"
               : "Right-click hold"}
