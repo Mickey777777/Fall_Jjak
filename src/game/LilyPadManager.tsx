@@ -593,7 +593,7 @@ export default function LilyPadManager({ paused }: Props) {
       id: ++popupIdRef.current,
       type: j.type,
       text: `${judgmentText(j.type)}  +${gained}`,
-      position: [pad.position[0], 1.5, pad.position[2]],
+      position: [pad.position[0] + 0.7, pad.position[1], pad.position[2]],
       bornAt: performance.now(),
       score: gained,
     });
