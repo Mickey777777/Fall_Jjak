@@ -602,7 +602,7 @@ button.ghost {
 .gameover .actions .ghost {
   background: rgba(0, 0, 0, 0.05);
   color: var(--ink);
-  border: 0;
+  border: 2px solid rgba(0, 0, 0, 0.12);
   box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
 }
 .gameover .actions .ghost:hover {
