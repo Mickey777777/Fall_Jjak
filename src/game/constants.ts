@@ -104,6 +104,9 @@ export const DIFFICULTY = {
 export const ENEMY = {
   FISH_LUNGE_HEIGHT: 1.6, // 이보다 낮게 날면 잡힘
   BIRD_DIVE_HEIGHT: 2.6, // 이보다 높게 날면 잡힘
+  // 새 좌우 패트롤 — 렌더와 충돌이 공유 (진동수 / amplitude 기본값)
+  BIRD_PATROL_FREQ: 1.1,
+  BIRD_DEFAULT_AMP: 1.5,
   CROC_BASE_DISTANCE: 9, // 개구리 뒤 N미터에서 시작
   CROC_SPEED: 1.00, // m/s 기본 속도 (점수 0 기준). 초반은 넉넉, 머뭇대면 가끔 등장
   CROC_SPEED_MAX: 2.60, // m/s 최대 속도 (CROC_SPEED_MAX_SCORE 도달 시)

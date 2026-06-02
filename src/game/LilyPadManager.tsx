@@ -395,7 +395,7 @@ export default function LilyPadManager({ paused }: Props) {
       frog.current.z = s.z;
 
       // 공중 충돌 검사
-      const hit = checkAirborneHit(s, enemies);
+      const hit = checkAirborneHit(s, enemies, now);
       if (hit) {
         const sx = frog.current.x;
         const sz = frog.current.z;
