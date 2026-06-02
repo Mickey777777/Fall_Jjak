@@ -29,7 +29,6 @@ import { comboMultiplier, judgeLanding, judgmentText } from "./ScoreSystem";
 import type {
   EnemyData,
   ItemData,
-  JudgmentPopup,
   LilyPadData,
 } from "./types";
 import { playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring } from "./sound";
