@@ -58,6 +58,8 @@ export interface ItemData {
   type: BuffType;
   position: Vector3Tuple;
   collected: boolean;
+  /** 잡힌 시각(performance.now()) — 입으로 빨려 들어가는 연출 타이밍 */
+  collectedAt?: number;
 }
 
 export interface ActiveBuff {

@@ -160,7 +160,12 @@ export default function LilyPadManager({ paused }: Props) {
         const dx = e.clientX - chargeStartPx.current.x;
         const dy = e.clientY - chargeStartPx.current.y;
         const px = Math.hypot(dx, dy);
-        const dist = pixelsToDistance(px);
+        // rangeUp 버프는 "최댓값"만 늘림 — 최솟값과 평상시 사거리 감각은 그대로 유지
+        const hasRangeUp = useGameStore
+          .getState()
+          .buffs.some((b) => b.type === "rangeUp");
+        const maxDist = JUMP.MAX_DISTANCE * (hasRangeUp ? 1.3 : 1);
+        const dist = pixelsToDistance(px, maxDist);
         chargeDistanceRef.current = dist;
         setChargeDistance(dist);
       } else if (!jumpPlanRef.current) {
@@ -182,28 +187,34 @@ export default function LilyPadManager({ paused }: Props) {
         setCharging(true);
       } else if (e.button === 0) {
         // 좌클릭: 혀 낼름 + 파리 사냥 시도
-        triggerTongue();
         // 클릭 지점으로 raycaster 재설정 — 파리는 공중에 있으므로 ground 투영이 아니라
         // 실제 광선과 파리 3D 위치의 거리로 판정해야 정확하다.
         const rect = canvas.getBoundingClientRect();
         mouseNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         mouseNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
         raycaster.setFromCamera(mouseNdc, camera);
+        // 잡힌 파리의 월드 좌표 — 혀가 여기까지 뻗음 (없으면 기본 낼름)
+        let tonguePos: [number, number, number] | null = null;
         setItems((list) => {
           let collected = false;
+          const aim = aimDirRef.current;
+          const cosAim = Math.cos(aim);
+          const sinAim = Math.sin(aim);
           const next = list.map((it) => {
             if (it.collected) return it;
             // 광선과 파리 3D 위치의 최단 거리
             tmpVec.set(it.position[0], it.position[1], it.position[2]);
             const d = raycaster.ray.distanceToPoint(tmpVec);
             // 개구리와의 거리도 일정 이내여야 함
-            const fd = Math.hypot(
-              it.position[0] - frog.current.x,
-              it.position[2] - frog.current.z,
-            );
+            const fdx = it.position[0] - frog.current.x;
+            const fdz = it.position[2] - frog.current.z;
+            const fd = Math.hypot(fdx, fdz);
+            // 개구리는 고개를 못 돌리므로 정면에 있는 파리만 혀가 닿음
+            const forward = fdx * cosAim + fdz * sinAim;
             // 혀 사거리 — 너무 멀리 있는 파리는 잡을 수 없음 (혀가 짧음)
-            if (d < 0.7 && fd < 3.2) {
+            if (d < 0.7 && fd < 3.2 && forward > 0) {
               collected = true;
+              tonguePos = [it.position[0], it.position[1], it.position[2]];
               incrementFlies();
               const gained = addScore(SCORECONST.FLY_BONUS, "Great");
               addPopup({
@@ -220,12 +231,14 @@ export default function LilyPadManager({ paused }: Props) {
               if (it.type === "scoreBoost")
                 addBuff({ type: "scoreBoost", remaining: 6 });
               playSlurp();
-              return { ...it, collected: true };
+              return { ...it, collected: true, collectedAt: performance.now() };
             }
             return it;
           });
           return collected ? next : list;
         });
+        // 파리를 잡았으면 그 위치로 혀를 뻗고, 아니면 앞으로 짧게 낼름
+        triggerTongue(tonguePos);
       }
     };
 
@@ -237,16 +250,15 @@ export default function LilyPadManager({ paused }: Props) {
       setCharging(false);
       // 점프 발사
       if (jumpPlanRef.current) return;
+      // 충전 시점에 이미 rangeUp 최댓값이 반영된 거리가 들어있음 — 추가 보정 불필요
       const dist = chargeDistanceRef.current;
-      const buffs = useGameStore.getState().buffs;
-      const rangeBonus = buffs.find((b) => b.type === "rangeUp") ? 1.3 : 1;
       // 회전 연잎 어긋남 적용 (보이지 않게)
       const finalAim = aimDirRef.current + rotatingShiftRef.current;
       const plan = makeJumpPlan(
         frog.current.x,
         frog.current.z,
         finalAim,  // ← aimDirRef.current → finalAim
-        dist * rangeBonus,
+        dist,
         arcHeightRef.current,
         useGameStore.getState().wind,
       );
@@ -601,9 +613,9 @@ export default function LilyPadManager({ paused }: Props) {
       handleFall(lx, lz);
       return;
     }
-    // 콤보 배율 적용
+    // 콤보 배율 적용 — NotBad는 콤보를 끊으므로 배율 혜택을 받지 않는다
     const combo = useGameStore.getState().combo;
-    const mult = comboMultiplier(combo);
+    const mult = j.type === "NotBad" ? 1 : comboMultiplier(combo);
     const raw = Math.round(j.baseScore * mult);
     const gained = addScore(raw, j.type);
     incrementPads();
@@ -1003,7 +1015,12 @@ export default function LilyPadManager({ paused }: Props) {
     });
     setEnemies((list) => list.filter((e) => e.position[0] > fx - LILY.CULL_BEHIND));
     setItems((list) =>
-      list.filter((i) => !i.collected && i.position[0] > fx - LILY.CULL_BEHIND),
+      list.filter(
+        (i) =>
+          i.position[0] > fx - LILY.CULL_BEHIND &&
+          // 잡힌 파리는 입으로 빨려 들어가는 연출(≈320ms)이 끝난 뒤 제거
+          (!i.collected || performance.now() - (i.collectedAt ?? 0) < 400),
+      ),
     );
   }
 
@@ -1077,7 +1094,7 @@ export default function LilyPadManager({ paused }: Props) {
         dist={Math.hypot(frog.current.x - crocRef.current.x, frog.current.z - crocRef.current.z)}
         caught={!!crocSnapAt}
       />
-      <ItemManager items={items} now={performance.now() / 1000} />
+      <ItemManager items={items} now={performance.now() / 1000} frogRef={frog} />
       <EffectsManager
         frogX={frog.current.x}
         frogZ={frog.current.z}

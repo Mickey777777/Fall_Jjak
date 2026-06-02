@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import type { Group, Mesh } from "three";
+import { Vector3 } from "three";
+import type { Group } from "three";
 import { COLORS } from "./constants";
 import { useGameStore } from "../store/useGameStore";
 
@@ -44,8 +45,10 @@ export default function Frog({
   const ref = useRef<Group>(null);
   const eyeLRef = useRef<Group>(null);
   const eyeRRef = useRef<Group>(null);
-  const tongueRef = useRef<Mesh>(null);
+  const tongueRef = useRef<Group>(null);
   const tongueAt = useGameStore((s) => s.tongueAt);
+  const tongueTarget = useGameStore((s) => s.tongueTarget);
+  const tongueTmp = useRef(new Vector3());
   // 회전 보간 상태
   const currentYaw = useRef(0);
   const currentPitch = useRef(0);
@@ -145,16 +148,41 @@ export default function Frog({
     if (eyeLRef.current) eyeLRef.current.scale.y = ey / 0.24;
     if (eyeRRef.current) eyeRRef.current.scale.y = ey / 0.24;
 
-    // 혀 애니메이션
+    // 혀 애니메이션 — 피벗은 입(그룹 원점), +z로 뻗는 혀 박스를 회전·스케일
     if (tongueRef.current) {
       const since = now - tongueAt;
-      if (since >= 0 && since < 200) {
-        const p = since / 200;
-        // 0~0.5: 뻗기, 0.5~1.0: 회수
-        const extend = p < 0.5 ? p * 2 : (1 - p) * 2;
+      // 파리를 잡으면 멀리까지 닿아야 하므로 시간을 거리에 비례해 늘림
+      const targeted = tongueTarget != null;
+      const dur = targeted ? 320 : 200;
+      if (since >= 0 && since < dur) {
+        const p = since / dur;
+        // 0~0.4: 뻗기, 0.4~1.0: 회수 (살짝 머문 뒤 빠르게 회수)
+        const extend = p < 0.4 ? p / 0.4 : 1 - (p - 0.4) / 0.6;
         tongueRef.current.visible = true;
-        tongueRef.current.scale.set(1, 1, 0.2 + extend * 1.1);
-        tongueRef.current.position.z = 0.3 + extend * 0.5;
+        if (targeted && ref.current) {
+          // 파리 월드 좌표 → 개구리 로컬 좌표 (개구리의 yaw/pitch/scale 반영)
+          ref.current.updateMatrixWorld();
+          const t = tongueTmp.current.set(
+            tongueTarget![0],
+            tongueTarget![1],
+            tongueTarget![2],
+          );
+          ref.current.worldToLocal(t);
+          // 입(피벗 [0,0.27,0.3]) 기준 방향 벡터
+          const dx = t.x - 0;
+          const dy = t.y - 0.27;
+          const dz = t.z - 0.3;
+          const horiz = Math.hypot(dx, dz) || 1e-4;
+          const dist = Math.hypot(dx, dy, dz);
+          tongueRef.current.rotation.order = "YXZ";
+          tongueRef.current.rotation.y = Math.atan2(dx, dz);
+          tongueRef.current.rotation.x = -Math.atan2(dy, horiz);
+          tongueRef.current.scale.set(1, 1, Math.max(0.05, dist * extend));
+        } else {
+          // 기본 낼름 — 앞으로 짧게
+          tongueRef.current.rotation.set(0, 0, 0);
+          tongueRef.current.scale.set(1, 1, 0.4 + extend * 1.0);
+        }
       } else {
         tongueRef.current.visible = false;
       }
@@ -236,11 +264,20 @@ export default function Frog({
         <meshStandardMaterial color={COLORS.FROG_DARK} />
       </mesh>
 
-      {/* 혀 — 보통은 숨겨져 있고 좌클릭 시만 보임 */}
-      <mesh ref={tongueRef} position={[0, 0.27, 0.3]} visible={false}>
-        <boxGeometry args={[0.06, 0.04, 1]} />
-        <meshStandardMaterial color="#ff5b8a" roughness={1} />
-      </mesh>
+      {/* 혀 — 입(피벗)에서 +z로 뻗음. 보통 숨겨져 있고 좌클릭 시만 보임.
+           파리를 잡으면 그 방향·거리로 회전·신장해 실제로 닿는다 (scale.z = 거리) */}
+      <group ref={tongueRef} position={[0, 0.27, 0.3]} visible={false}>
+        {/* 혀 줄기 — 그룹 z 0..1 차지, 그룹 scale.z로 길이 조절 */}
+        <mesh position={[0, 0, 0.5]}>
+          <boxGeometry args={[0.06, 0.04, 1]} />
+          <meshStandardMaterial color="#ff5b8a" roughness={1} />
+        </mesh>
+        {/* 끈끈한 혀끝 — 파리를 붙잡는 부분 (줄기 끝에 위치) */}
+        <mesh position={[0, 0, 1]}>
+          <boxGeometry args={[0.12, 0.09, 0.05]} />
+          <meshStandardMaterial color="#ff7ba3" roughness={1} />
+        </mesh>
+      </group>
     </group>
   );
 }
