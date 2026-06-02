@@ -104,6 +104,7 @@ export default function LilyPadManager({ paused }: Props) {
     remaining: number;
     duration: number;
   } | null>(null);
+  const swimStabilizedRef = useRef(new Set<number>());
   const rotatingShiftRef = useRef(0);
   const currentPadRef = useRef<{
     padId: number;
@@ -446,16 +447,35 @@ export default function LilyPadManager({ paused }: Props) {
       // 4. 점멸 연잎 검사 (기존)
       for (const p of pads) {
         if (p.type !== "blinking") continue;
-        if (p.steppedAt != null) continue;
         const dx = p.position[0] - fx;
         const dz = p.position[2] - fz;
-        if (Math.hypot(dx, dz) < p.radius) {
-          const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-          // blinking 꺼진 상태
-          if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
-            handleFall(frog.current.x, frog.current.z, p.id);
-            return;
+        if (Math.hypot(dx, dz) >= p.radius) continue;
+
+        if (swimStabilizedRef.current.has(p.id)) {
+          // 수영 복귀 점멸 연잎: 1초 안정 → 줄어들기 시작 → ROTTEN_LIFETIME 후 붕괴
+          if (p.steppedAt != null) {
+            const elapsed = now - p.steppedAt;
+            if (elapsed >= 1.0 + LILY.ROTTEN_LIFETIME) {
+              handleFall(frog.current.x, frog.current.z, p.id);
+              return;
+            } else if (elapsed >= 1.0 && p.swimShrinkAt == null) {
+              // 줄어들기 시작 타임스탬프 기록
+              setPads((list) =>
+                list.map((pad) =>
+                  pad.id === p.id ? { ...pad, swimShrinkAt: now } : pad,
+                ),
+              );
+            }
           }
+          continue;
+        }
+
+        if (p.steppedAt != null) continue; // 정상 착지로 안정화된 연잎
+        const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+        // blinking 꺼진 상태
+        if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
+          handleFall(frog.current.x, frog.current.z, p.id);
+          return;
         }
       }
 
@@ -618,8 +638,9 @@ export default function LilyPadManager({ paused }: Props) {
         ),
       );
     }
-    // ★ 점멸 연잎도 밟으면 안정화 (steppedAt 기록)
+    // ★ 점멸 연잎도 밟으면 안정화 (steppedAt 기록) — 정상 착지이므로 swim 카운트다운 해제
     if (pad.type === "blinking") {
+      swimStabilizedRef.current.delete(pad.id);
       setPads((list) =>
         list.map((p) =>
           p.id === pad.id
@@ -691,17 +712,113 @@ export default function LilyPadManager({ paused }: Props) {
   function handleFall(x: number, z: number, excludePadId?: number) {
     // 생존 수영 버프 검사
     if (consumeSwimBuff()) {
-      const usable =
-        excludePadId == null ? pads : pads.filter((p) => p.id !== excludePadId);
-      const { pad } = nearestPad(x, z, usable);
+      const nowSec = performance.now() / 1000;
+      const excludedPad = excludePadId != null ? pads.find((p) => p.id === excludePadId) : null;
+      // swim 안정화된 점멸 연잎이 만료되는 경우는 재복귀 허용 안 함 (일반 exclude처럼 처리)
+      const excludeIsBlinking =
+        excludedPad?.type === "blinking" &&
+        !swimStabilizedRef.current.has(excludePadId ?? -1);
+      const excludeIsRotten = excludedPad?.type === "rotten";
+
+      // 복귀 가능 연잎:
+      // - 함정 제외
+      // - 꺼진 점멸 연잎 제외 (단, 지금 밟고 있던 점멸 연잎은 포함 → 강제로 켜줌)
+      // - 비점멸 exclude 연잎 제외
+      const usable = pads.filter((p) => {
+        if (p.type === "trap" || p.type === "spring") return false;
+        if (p.id === excludePadId && !excludeIsBlinking) return false;
+        if (p.type === "blinking" && p.steppedAt == null && !swimStabilizedRef.current.has(p.id)) {
+          const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+          if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
+        }
+        return true;
+      });
+
+      // 이동 연잎은 현재 시각 위치로 보정해서 nearestPad에 전달
+      const usableWithVisual = usable.map((p) => {
+        if (p.type !== "moving") return p;
+        const t = nowSec - p.spawnTime;
+        const amp = p.amplitude ?? 1.4;
+        const freq = p.frequency ?? 0.8;
+        const offset = Math.sin(t * freq) * amp;
+        const newPos: [number, number, number] =
+          p.axis === "x"
+            ? [p.position[0] + offset, p.position[1], p.position[2]]
+            : [p.position[0], p.position[1], p.position[2] + offset];
+        return { ...p, position: newPos };
+      });
+
+      // 이동 연잎: 현재 시각 위치에서 radius*2 이상 멀면 복귀 불가 (이동 반경 전체가 발동 범위가 되는 것 방지)
+      const swimCandidates = usableWithVisual.filter((p) => {
+        if (p.type !== "moving") return true;
+        return Math.hypot(p.position[0] - x, p.position[2] - z) <= p.radius * 2;
+      });
+
+      // 삭은 연잎 만료 시: 앞쪽 연잎으로만 복귀 (뒤로 가면 후반에 거리가 줄어 게임 진행 불가)
+      const finalCandidates = excludeIsRotten
+        ? swimCandidates.filter((p) => p.position[0] >= x - 0.1)
+        : swimCandidates;
+
+      const { pad } = nearestPad(x, z, finalCandidates);
       if (pad) {
         frog.current.x = pad.position[0];
         frog.current.z = pad.position[2];
         frog.current.y = 0;
         landedPos.current.x = pad.position[0];
         landedPos.current.z = pad.position[2];
-        slideRef.current = null;       // ★ 잔여 슬라이드 제거 (복귀 직후 또 미끄러져 죽는 것 방지)
-        currentPadRef.current = null;  // ★ 이동 연잎 추적 해제
+        slideRef.current = null;
+
+        // 이동 연잎이면 추적 재개 (복귀 위치 = 시각 위치이므로 offset = 0)
+        const origPad = pads.find((p) => p.id === pad.id);
+        if (origPad?.type === "moving") {
+          currentPadRef.current = { padId: pad.id, offsetX: 0, offsetZ: 0 };
+        } else {
+          currentPadRef.current = null;
+        }
+
+        // 특수 연잎 효과 적용 (landFrog 착지와 동일한 처리)
+        if (pad.type === "blinking") {
+          // 점멸 연잎: 즉시 안정화 (stale state 방지 ref도 업데이트)
+          swimStabilizedRef.current.add(pad.id);
+          setPads((list) =>
+            list.map((p) => p.id === pad.id ? { ...p, steppedAt: nowSec } : p),
+          );
+        } else if (pad.type === "rotten") {
+          // 삭은 연잎: steppedAt 설정해 타이머 시작 (1.2초 내 탈출 필요)
+          setPads((list) =>
+            list.map((p) => p.id === pad.id ? { ...p, steppedAt: nowSec } : p),
+          );
+        } else if (pad.type === "slippery") {
+          // 미끄러운 연잎: 모멘텀 없는 최소 슬라이드
+          const slideDist = pad.radius * 0.25;
+          const SLIDE_DURATION = 0.85;
+          const speed = (2.5 * slideDist) / SLIDE_DURATION;
+          slideRef.current = {
+            vx: Math.cos(aimDirRef.current) * speed,
+            vz: Math.sin(aimDirRef.current) * speed,
+            remaining: SLIDE_DURATION,
+            duration: SLIDE_DURATION,
+          };
+        } else if (pad.type === "rotating") {
+          // 회전 연잎: 다음 점프 방향 편향 적용
+          const dir = origPad?.rotationDirection ?? 1;
+          rotatingShiftRef.current = -dir * 0.1;
+        } else if (pad.type === "spring") {
+          // 스프링 연잎: 기본 거리로 즉시 점프 발사
+          playSpring();
+          const bigPlan = makeJumpPlan(
+            frog.current.x,
+            frog.current.z,
+            aimDirRef.current,
+            JUMP.MIN_DISTANCE * 1.5,
+            Math.max(arcHeightRef.current, 3.5),
+            useGameStore.getState().wind,
+          );
+          jumpPlanRef.current = bigPlan;
+          jumpTimeRef.current = 0;
+          currentPadRef.current = null;
+        }
+
         addPopup({
           id: ++popupIdRef.current,
           type: "Great",

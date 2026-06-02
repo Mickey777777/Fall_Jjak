@@ -126,7 +126,13 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
       if (pad.axis === "x") x += Math.sin(t * freq) * amp;
       else z += Math.sin(t * freq) * amp;
     }
-    if (pad.type === "blinking" && pad.steppedAt == null) {
+    if (pad.type === "blinking" && pad.swimShrinkAt != null) {
+      // 수영 복귀 점멸 연잎: swimShrinkAt 이후 삭은 연잎과 동일하게 줄어듦
+      const shrinkElapsed = now - pad.swimShrinkAt;
+      const k = Math.max(0, 1 - shrinkElapsed / LILY.ROTTEN_LIFETIME);
+      ref.current.scale.set(k, k, k);
+      y -= (1 - k) * 0.3;
+    } else if (pad.type === "blinking" && pad.steppedAt == null) {
       const cycle = (t % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
       const visible = cycle < LILY.BLINK_VISIBLE_RATIO;
       const s = visible ? 1 : 0.001;
