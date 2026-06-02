@@ -41,6 +41,8 @@ export function judgmentText(t: JudgmentType): string {
       return "Not bad..";
     case "Miss":
       return "Miss";
+    default:
+      return "";
   }
 }
 
@@ -55,5 +57,7 @@ export function judgmentColor(t: JudgmentType): string {
       return "#9CA3AF";
     case "Miss":
       return "#ff6a6a";
+    default:
+      return "#ffffff";
   }
 }

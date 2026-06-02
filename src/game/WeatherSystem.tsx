@@ -22,7 +22,7 @@ interface Props {
 // 각 장식은 (instance 수, 슬롯 폭, cullBehind) 트리플로 정의된다.
 const WAVE = { N: 64, SPACING: 0.8, CULL: 16 };
 const SPARKLE = { N: 30, SPACING: 1.6, CULL: 6 };
-const DECO_PAD = { N: 60, SPACING: 1.0, CULL: 14 };
+const DECO_PAD = { N: 36, SPACING: 1.5, CULL: 12 };
 const SEAWEED = { N: 24, SPACING: 2.2, CULL: 4 };
 
 // 안개 튜닝값
