@@ -950,7 +950,7 @@ export default function LilyPadManager({ paused }: Props) {
           
           kept.push({
             id: ++padIdRef.current,
-            type: "basic",
+            type: branchType,
             position: [bx, WORLD.PAD_TOP_Y, bz],
             radius: LILY.RADIUS * sizeFactor * (0.7 + Math.random() * 0.3),
             spawnTime: performance.now() / 1000,
