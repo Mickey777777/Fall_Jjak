@@ -130,11 +130,13 @@ export function playCrocSnap() {
 }
 
 let _lastCrocWarnAt = 0;
-export function playCrocWarnIfNeeded() {
+export function playCrocWarnIfNeeded(dist: number) {
   const now = performance.now();
-  if (now - _lastCrocWarnAt < 3800) return;
+  // 5.8m(화면 등장) → 3800ms, 2.6m(임박) → 1000ms 으르렁 간격
+  const t = Math.min(1, Math.max(0, (dist - 2.6) / (5.8 - 2.6)));
+  const interval = 1000 + t * 2800;
+  if (now - _lastCrocWarnAt < interval) return;
   _lastCrocWarnAt = now;
-  // 낮은 으르렁 소리
   blip(55, "sawtooth", 0.42, 0.12);
   setTimeout(() => blip(72, "sawtooth", 0.32, 0.08), 190);
 }

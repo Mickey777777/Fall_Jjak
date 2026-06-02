@@ -80,8 +80,9 @@ interface GameState {
   incrementPads: () => void;
   toggleMute: () => void;
   setShowTutorial: (b: boolean) => void;
-  crocWarning: boolean;
-  setCrocWarning: (b: boolean) => void;
+  /** 악어 근접 위험도 0~1 (WARN_DIST=0 → KILL_DIST=1). 0이면 경고 숨김 */
+  crocDanger: number;
+  setCrocDanger: (v: number) => void;
 }
 
 const initialRunState = {
@@ -102,7 +103,7 @@ const initialRunState = {
   weather: "clear" as WeatherType,
   wind: { direction: 0, strength: 0 } as WindState,
   buffs: [] as ActiveBuff[],
-  crocWarning: false,
+  crocDanger: 0,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -196,5 +197,5 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ muted: next });
   },
   setShowTutorial: (b) => set({ showTutorial: b }),
-  setCrocWarning: (b) => set({ crocWarning: b }),
+  setCrocDanger: (v) => set({ crocDanger: v }),
 }));

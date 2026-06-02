@@ -1,8 +1,12 @@
 import { useMemo, useRef } from "react";
+import type { MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { COLORS, LILY, WORLD } from "./constants";
 import type { LilyPadData } from "./types";
+
+const CROC_PUSH_RADIUS = 2.5;
+const CROC_PUSH_MAX    = 2.0;
 
 interface Props {
   pad: LilyPadData;
@@ -10,6 +14,7 @@ interface Props {
   highlight?: boolean;
   /** 조준 방향이 향하는 후보 연잎 여부 — 은은한 외곽 글로우/파문 표시 */
   isCandidate?: boolean;
+  crocRef?: MutableRefObject<{ x: number; z: number }>;
 }
 
 /**
@@ -20,12 +25,13 @@ interface Props {
  *  - 흰 파편 테두리 폐기 → 얇은 픽셀 물결 링 (rippleAt 트리거 시 잠깐 보임)
  *  - 특수 타입별 명확한 비주얼 (삭은/미끄러운/이동/회전/함정/탄성/점멸)
  */
-export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
+export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: Props) {
   const ref = useRef<Group>(null);
   const rippleRef = useRef<Mesh>(null);
   const rippleMatRef = useRef<MeshBasicMaterial>(null);
   const candidateRingRef = useRef<Mesh>(null);
   const candidateRingMatRef = useRef<MeshBasicMaterial>(null);
+  const pushOffsetRef = useRef(0);
 
   // pad 단위 의사난수
   const rnd = useMemo(() => {
@@ -113,7 +119,7 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
   const padThickness = 0.14;
   const decoScale = pad.radius / LILY.RADIUS;
 
-  useFrame(() => {
+  useFrame((_, delta) => {
     if (!ref.current) return;
     const t = now - pad.spawnTime;
     let x = pad.position[0];
@@ -149,6 +155,22 @@ export default function LilyPad({ pad, now, highlight, isCandidate }: Props) {
     }
     // 가벼운 부유감
     y += Math.sin(t * 1.4 + pad.id) * 0.012;
+
+    // 악어가 지나갈 때 Z축으로 밀려남 (복귀 없음 — 더 많이 밀릴 때만 갱신)
+    if (crocRef?.current) {
+      const dz = pad.position[2] - crocRef.current.z;
+      const dist = Math.hypot(pad.position[0] - crocRef.current.x, dz);
+      if (dist < CROC_PUSH_RADIUS) {
+        const pushDir = Math.abs(dz) > 0.08 ? Math.sign(dz) : (pad.id % 2 === 0 ? 1 : -1);
+        const forcePush = pushDir * (1 - dist / CROC_PUSH_RADIUS) * CROC_PUSH_MAX;
+        // 현재보다 더 멀리 밀릴 때만 lerp — 돌아오는 일 없음
+        if (Math.abs(forcePush) > Math.abs(pushOffsetRef.current)) {
+          pushOffsetRef.current += (forcePush - pushOffsetRef.current) * (1 - Math.exp(-7 * delta));
+        }
+      }
+      z += pushOffsetRef.current;
+    }
+
     ref.current.position.set(x, y, z);
 
     // 착지 파문 표시
