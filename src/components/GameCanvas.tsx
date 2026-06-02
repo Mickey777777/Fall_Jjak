@@ -2,7 +2,7 @@ import { Canvas } from "@react-three/fiber";
 import { Suspense, useEffect } from "react";
 import LilyPadManager from "../game/LilyPadManager";
 import { useGameStore } from "../store/useGameStore";
-import { COLORS } from "../game/constants";
+import { COLORS, WORLD } from "../game/constants";
 
 interface Props {
   paused: boolean;
@@ -32,7 +32,7 @@ export default function GameCanvas({ paused }: Props) {
       <Canvas
         shadows
         dpr={[1, 1.5]}
-        camera={{ position: [-10, 14, -10], fov: 45, near: 0.1, far: 200 }}
+        camera={{ position: [-10, 14, -10], fov: WORLD.CAMERA_FOV, near: 0.1, far: 200 }}
         gl={{ antialias: true }}
         onCreated={({ scene }) => {
           scene.background = null; // CSS 배경 사용
