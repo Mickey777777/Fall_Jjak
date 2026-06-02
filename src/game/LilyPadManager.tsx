@@ -133,14 +133,28 @@ export default function LilyPadManager({ paused }: Props) {
   useEffect(() => {
     const canvas = gl.domElement;
 
-    const onMouseMove = (e: MouseEvent) => {
+    // 화면 좌표 → 개구리 기준 조준 방향(±70° 제한)으로 갱신.
+    // 빠른 클릭으로 mousemove가 누락되거나 점프 비행 중 갱신이 막혀도
+    // 조준이 최신이 되도록, 충전 시작(mousedown) 때도 호출한다.
+    const updateAimFromClient = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
-      mouseNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      mouseNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
       raycaster.setFromCamera(mouseNdc, camera);
       raycaster.ray.intersectPlane(aimPlane, tmpVec);
       cursorWorld.current.copy(tmpVec);
+      // 조준 방향: 개구리 → 커서 (단, X+ 방향에 한해 ±70도로 제한)
+      const dx = cursorWorld.current.x - frog.current.x;
+      const dz = cursorWorld.current.z - frog.current.z;
+      let dir = Math.atan2(dz, dx);
+      const limit = (Math.PI / 180) * 70;
+      if (dir > limit) dir = limit;
+      if (dir < -limit) dir = -limit;
+      aimDirRef.current = dir;
+      setAim(dir);
+    };
 
+    const onMouseMove = (e: MouseEvent) => {
       // 충전 중이면 드래그 거리 = 화면상 우클릭 시작점에서의 거리
       if (chargingRef.current && chargeStartPx.current) {
         const dx = e.clientX - chargeStartPx.current.x;
@@ -150,16 +164,7 @@ export default function LilyPadManager({ paused }: Props) {
         chargeDistanceRef.current = dist;
         setChargeDistance(dist);
       } else if (!jumpPlanRef.current) {
-        // 조준 방향: 개구리 → 커서 (단, X+ 방향에 한해 ±70도로 제한)
-        const dx = cursorWorld.current.x - frog.current.x;
-        const dz = cursorWorld.current.z - frog.current.z;
-        let dir = Math.atan2(dz, dx);
-        // X+(=0 rad) 기준 ±70° 제한
-        const limit = (Math.PI / 180) * 70;
-        if (dir > limit) dir = limit;
-        if (dir < -limit) dir = -limit;
-        aimDirRef.current = dir;
-        setAim(dir);
+        updateAimFromClient(e.clientX, e.clientY);
       }
     };
 
@@ -168,6 +173,8 @@ export default function LilyPadManager({ paused }: Props) {
       if (e.button === 2) {
         // 우클릭: 충전 시작
         if (jumpPlanRef.current) return;
+        // 빠른 클릭 대비 — 누른 위치로 조준을 즉시 갱신 (mousemove 누락/비행 중 미갱신 보정)
+        updateAimFromClient(e.clientX, e.clientY);
         chargingRef.current = true;
         chargeStartPx.current = { x: e.clientX, y: e.clientY };
         chargeDistanceRef.current = JUMP.MIN_DISTANCE;
