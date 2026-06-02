@@ -12,16 +12,16 @@ export default function PauseMenu() {
           계속하기
         </button>
         <button
-          className="ghost"
+          className="ghost restart"
           onClick={() => {
             resetRun();
             setPhase("playing");
           }}
         >
-          다시 시작
+          다시하기
         </button>
-        <button className="ghost" onClick={() => setPhase("menu")}>
-          타이틀로
+        <button className="ghost restart" onClick={() => setPhase("menu")}>
+          메인으로
         </button>
       </div>
     </div>
