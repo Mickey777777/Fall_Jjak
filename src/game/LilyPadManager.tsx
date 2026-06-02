@@ -198,14 +198,14 @@ export default function LilyPadManager({ paused }: Props) {
             if (d < 0.7 && fd < 3.2) {
               collected = true;
               incrementFlies();
-              addScore(SCORECONST.FLY_BONUS, "Great");
+              const gained = addScore(SCORECONST.FLY_BONUS, "Great");
               addPopup({
                 id: ++popupIdRef.current,
                 type: "Great",
-                text: `+${SCORECONST.FLY_BONUS} 낼름!`,
+                text: `+${gained} 낼름!`,
                 position: [it.position[0], 2.0, it.position[2]],
                 bornAt: performance.now(),
-                score: SCORECONST.FLY_BONUS,
+                score: gained,
               });
               if (it.type === "swim") addBuff({ type: "swim", remaining: 9999 });
               if (it.type === "rangeUp")
