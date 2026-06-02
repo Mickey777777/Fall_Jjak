@@ -146,7 +146,7 @@ export const COLORS = {
   // 적/아이템
   FLY: "#202020",
   FISH: "#5a8eab",
-  BIRD: "#9a78c8",
+  BIRD: "#604224",
   CROC: "#3e572a",
 };
 
