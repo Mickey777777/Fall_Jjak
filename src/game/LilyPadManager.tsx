@@ -488,8 +488,16 @@ export default function LilyPadManager({ paused }: Props) {
         const linear = Math.max(0, s.remaining / s.duration);
         const ratio = Math.pow(linear, 1.5);
         const step = Math.min(s.remaining, dt);
-        frog.current.x += s.vx * step * ratio;
-        frog.current.z += s.vz * step * ratio;
+        const dx = s.vx * step * ratio;
+        const dz = s.vz * step * ratio;
+        frog.current.x += dx;
+        frog.current.z += dz;
+        // 이동 연잎 위에서는 추적 로직이 매 프레임 frog 위치를 연잎 기준으로
+        // 덮어쓰므로, 미끄러짐이 지워지지 않도록 연잎 기준 오프셋에도 누적한다.
+        if (currentPadRef.current) {
+          currentPadRef.current.offsetX += dx;
+          currentPadRef.current.offsetZ += dz;
+        }
         s.remaining -= dt;
         if (s.remaining <= 0) slideRef.current = null;
       }
