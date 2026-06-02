@@ -133,13 +133,13 @@ const JUDGMENT_HELP: HelpItem[] = [
   },
   {
     Icon: CheckCircle2,
-    name: "Great +20",
+    name: "Great +25",
     color: "#22C55E",
     description: "안정적으로 좋은 위치에 착지했을 때 받는 판정입니다.",
   },
   {
     Icon: Sparkles,
-    name: "Not bad.. +10",
+    name: "Not bad.. +15",
     color: "#9CA3AF",
     description: "연잎에 착지했지만 중심에서 조금 벗어났을 때 받는 기본 판정입니다.",
   },
