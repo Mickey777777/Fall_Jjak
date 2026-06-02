@@ -92,8 +92,6 @@ export default function LilyPadManager({ paused }: Props) {
   const [yarrBurst, setYarrBurst] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [splashAt, setSplashAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [crocSnapAt, setCrocSnapAt] = useState<{ x: number; z: number; cx: number; cz: number; bornAt: number } | null>(null);
-  /** 카메라가 따라가는 "지면" 위치 — 착지할 때만 갱신되어 공중 비행 동안 배경이 흔들리지 않음 */
-  const landedPos = useRef({ x: 0, z: 0 });
 
   // 악어 위치 (월드 좌표)
   const crocRef = useRef({ x: -ENEMY.CROC_BASE_DISTANCE, z: 0 });
@@ -604,10 +602,6 @@ export default function LilyPadManager({ paused }: Props) {
     const gained = addScore(raw, j.type);
     incrementPads();
 
-    // 카메라가 따라갈 지면 위치 갱신 — 이제부터 카메라가 새 자리로 부드럽게 미끄러진다
-    landedPos.current.x = lx;
-    landedPos.current.z = lz;
-
     // 착지 연잎에 파문 트리거
     setPads((list) =>
       list.map((p) =>
@@ -770,8 +764,6 @@ export default function LilyPadManager({ paused }: Props) {
         frog.current.x = pad.position[0];
         frog.current.z = pad.position[2];
         frog.current.y = 0;
-        landedPos.current.x = pad.position[0];
-        landedPos.current.z = pad.position[2];
         slideRef.current = null;
 
         // 이동 연잎이면 추적 재개 (복귀 위치 = 시각 위치이므로 offset = 0)
