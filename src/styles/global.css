@@ -681,6 +681,12 @@ button.ghost {
 .pause .card .title {
   text-align: center;
 }
+.pause .restart {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--ink);
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.18);
+}
 
 /* 악어 위험 이펙트 */
 .croc-danger-vignette {
