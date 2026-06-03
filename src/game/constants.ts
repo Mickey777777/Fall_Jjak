@@ -118,7 +118,9 @@ export const DIFFICULTY = {
 // 적 / 환경
 // ──────────────────────────────────────────────
 export const ENEMY = {
-  FISH_LUNGE_HEIGHT: 1.6, // 이보다 낮게 날면 잡힘
+  // 이보다 낮게 날면 잡힘. 기본 점프 정점(arcHeight 기본 2.2)보다 높게 둬서
+  // "기본 점프로는 물고기에 걸리고, A로 궤적을 높여야 통과" → 점프를 강제한다.
+  FISH_LUNGE_HEIGHT: 2.4,
   // 이보다 높게 날면 잡힘. 기본 점프 정점(arcHeight 기본 2.2)보다 낮게 둬야
   // "기본 점프로는 새에 걸리고, S로 궤적을 낮춰야 통과" 가 성립한다.
   BIRD_DIVE_HEIGHT: 1.9,
@@ -126,7 +128,7 @@ export const ENEMY = {
   // 물고기 도약 — 렌더와 충돌이 공유하는 y 공식 (fishLiveY). 잠겨 있을 땐 피격 없음
   FISH_LEAP_FREQ: 1.6, // 솟구침 주기
   FISH_REST_Y: -1.3, // 잠긴 상태 기준 y (몸 최고점도 수면 아래)
-  FISH_LEAP_RISE: 1.7, // 도약 상승량 보정 (실제 상승 = leap × (amp + 이 값))
+  FISH_LEAP_RISE: 2.2, // 도약 상승량 보정 (실제 상승 = leap × (amp + 이 값)) — 판정선(2.4)까지 솟구치도록 상향
   FISH_DEFAULT_AMP: 1, // amplitude 기본값
   FISH_BREACH_Y: -0.5, // 물고기 몸 중심이 이 높이(수면) 위로 솟았을 때만 피격 판정
   // 물고기 히트박스 — 머리-꼬리(x)로 길고 옆(z)으로 좁은 몸에 맞춘 타원 (원형은 옆으로 과대)
