@@ -196,12 +196,26 @@ export default function HUD() {
 const RANKUP_DUR = 900; // ms — CSS 애니메이션 길이와 일치
 
 /**
- * 콤보 등급이 오른 순간 화면 전체에 번지는 금빛 반짝.
+ * 등급별 테두리 색 — 올라갈수록 금빛 → 호박 → 장밋빛 → 핑크로 미묘하게 이동.
+ * [R,G,B] 만 반환하고 알파/세기는 tier로 별도 램프한다.
+ */
+function rankEdgeRGB(mult: number): string {
+  if (mult < 1.6) return "255, 219, 110"; // 금빛
+  if (mult < 2.0) return "255, 184, 92"; // 호박
+  if (mult < 2.4) return "255, 150, 120"; // 장밋빛
+  return "255, 140, 200"; // 핑크
+}
+
+/**
+ * 콤보 등급이 오른 순간 화면 테두리에 번지는 금빛 반짝.
+ * 등급(tier)이 높을수록 색이 바뀌고 세기가 조금씩 강해진다 (과하지 않게).
  * 스토어의 comboRankUpAt 타임스탬프를 구독해, 값이 바뀌면 잠깐 표시했다 사라진다.
  * key에 타임스탬프를 줘 연속 발동 시에도 CSS 애니메이션이 매번 재시작된다.
  */
 function ComboRankUpOverlay() {
   const at = useGameStore((s) => s.comboRankUpAt);
+  const mult = useGameStore((s) => s.comboRankMult);
+  const tier = useGameStore((s) => s.comboRankTier);
   const [shown, setShown] = useState(0);
 
   useEffect(() => {
@@ -213,8 +227,23 @@ function ComboRankUpOverlay() {
 
   if (shown === 0) return null;
 
+  const rgb = rankEdgeRGB(mult);
+  const i = Math.min(1, tier / 8); // 0~1 세기 램프 (8단계 상한)
+  const edgeA = (0.28 + i * 0.14).toFixed(3); // 테두리 밝기
+  const midA = (0.08 + i * 0.05).toFixed(3); // 안쪽 톤
+  const blur = (95 + i * 55).toFixed(0); // 글로우 두께
+  const shadowA = (0.32 + i * 0.16).toFixed(3);
+
   return (
-    <div className="rankup-overlay" key={shown}>
+    <div
+      className="rankup-overlay"
+      key={shown}
+      style={{
+        ["--rank-mid" as string]: `rgba(${rgb}, ${midA})`,
+        ["--rank-edge" as string]: `rgba(${rgb}, ${edgeA})`,
+        ["--rank-shadow" as string]: `${blur}px rgba(${rgb}, ${shadowA})`,
+      }}
+    >
       <div className="rankup-burst" />
     </div>
   );
