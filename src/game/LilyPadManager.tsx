@@ -1291,28 +1291,16 @@ export default function LilyPadManager({ paused }: Props) {
         
         const branchChance = Math.max(0.25, 0.55 - score / 1500);
         const branchCount = Math.random() < branchChance ? (Math.random() < 0.4 ? 2 : 1) : 0;
-        for (let b = 0; b < branchCount; b++) {
-          const bx = maxX - gap * (0.4 + Math.random() * 0.5);
-          const bz = lat + (-zigSign) * (1.6 + Math.random() * 2.2);
-          if (Math.abs(bz) > LILY.MAX_LATERAL * 1.4) continue;
-
-          // ★ 곁가지 타입 결정 — 점수 따라 spring/trap이 등장
-          let branchType: LilyPadData["type"] = "basic";
-          const dangerChance = Math.min(0.35, score / 2000);  // 최대 35%
-          if (Math.random() < dangerChance) {
-            branchType = Math.random() < 0.5 ? "spring" : "trap";  // 5:5
-          }
-          
-          kept.push({
-            id: ++padIdRef.current,
-            type: branchType,
-            position: [bx, WORLD.PAD_TOP_Y, bz],
-            radius: LILY.RADIUS * sizeFactor * (0.7 + Math.random() * 0.3),
-            spawnTime: gameNow(),
-            visualRotation: (Math.random() - 0.5) * 0.7,
-            visualScale: 0.75 + Math.random() * 0.3,
-          });
-        }
+        spawnBranchPads(kept, padIdRef, {
+          count: branchCount,
+          baseX: maxX,
+          lat,
+          gap,
+          zigSign,
+          sizeFactor,
+          spawnTime: gameNow(),
+          dangerScore: score,
+        });
 
         // 적 스폰
         const enemySpawnProb =
@@ -1478,6 +1466,49 @@ export default function LilyPadManager({ paused }: Props) {
   );
 }
 
+/**
+ * 메인 연잎 옆에 곁가지(작은 연잎)들을 배치 — cullAndSpawn과 initialPads가 공유한다.
+ * 곁가지 개수는 두 호출부의 확률이 달라 caller가 정해 count로 넘긴다.
+ * dangerScore가 클수록 곁가지가 spring/trap이 될 확률이 오른다(0이면 항상 basic).
+ */
+function spawnBranchPads(
+  out: LilyPadData[],
+  padIdRef: { current: number },
+  opts: {
+    count: number;
+    baseX: number;
+    lat: number;
+    gap: number;
+    zigSign: 1 | -1;
+    sizeFactor: number;
+    spawnTime: number;
+    dangerScore: number;
+  },
+) {
+  for (let b = 0; b < opts.count; b++) {
+    const bx = opts.baseX - opts.gap * (0.4 + Math.random() * 0.5);
+    const bz = opts.lat + -opts.zigSign * (1.6 + Math.random() * 2.2);
+    if (Math.abs(bz) > LILY.MAX_LATERAL * 1.4) continue;
+
+    // 곁가지 타입 — 점수(위험도) 따라 spring/trap이 등장 (dangerScore=0이면 항상 basic)
+    let branchType: LilyPadData["type"] = "basic";
+    const dangerChance = Math.min(0.35, opts.dangerScore / 2000); // 최대 35%
+    if (Math.random() < dangerChance) {
+      branchType = Math.random() < 0.5 ? "spring" : "trap"; // 5:5
+    }
+
+    out.push({
+      id: ++padIdRef.current,
+      type: branchType,
+      position: [bx, WORLD.PAD_TOP_Y, bz],
+      radius: LILY.RADIUS * opts.sizeFactor * (0.7 + Math.random() * 0.3),
+      spawnTime: opts.spawnTime,
+      visualRotation: (Math.random() - 0.5) * 0.7,
+      visualScale: 0.75 + Math.random() * 0.3,
+    });
+  }
+}
+
 /** 시작 시 깔아두는 연잎들 — 첫 점프부터 자연스러운 경로를 보장한다. */
 function initialPads(padIdRef: { current: number }): LilyPadData[] {
   const out: LilyPadData[] = [];
@@ -1513,22 +1544,18 @@ function initialPads(padIdRef: { current: number }): LilyPadData[] {
       visualScale: 0.85 + Math.random() * 0.3,
     });
 
-    // ★ 곁가지 — cullAndSpawn과 동일한 로직 (score=0 기준이라 55%)
+    // ★ 곁가지 — cullAndSpawn과 동일한 배치 로직 (시작 단계라 위험 타입 없이 basic, score=0 기준 55%)
     const branchCount = Math.random() < 0.55 ? (Math.random() < 0.3 ? 2 : 1) : 0;
-    for (let b = 0; b < branchCount; b++) {
-      const bx = x - gap * (0.4 + Math.random() * 0.5);
-      const bz = lat + (-zigSign) * (1.6 + Math.random() * 2.2);
-      if (Math.abs(bz) > LILY.MAX_LATERAL * 1.4) continue;
-      out.push({
-        id: ++padIdRef.current,
-        type: "basic",
-        position: [bx, WORLD.PAD_TOP_Y, bz],
-        radius: LILY.RADIUS * 1.2 * (0.7 + Math.random() * 0.3),
-        spawnTime: 0,
-        visualRotation: (Math.random() - 0.5) * 0.7,
-        visualScale: 0.75 + Math.random() * 0.3,
-      });
-    }
+    spawnBranchPads(out, padIdRef, {
+      count: branchCount,
+      baseX: x,
+      lat,
+      gap,
+      zigSign,
+      sizeFactor: 1.2,
+      spawnTime: 0,
+      dangerScore: 0,
+    });
 
     lastZ = lat;
   }
