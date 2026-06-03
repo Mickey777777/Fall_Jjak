@@ -52,6 +52,17 @@ const DEBUG_FORCE_ENEMY_TYPE: EnemyData["type"] | null = null;
 const DEBUG_START_BUFFS: BuffType[] = [];
 // 🧪 디버그: 날씨 고정 (예: "rain" → 폭우/번개 테스트). 자동 사이클 중단. 끝나면 null로
 const DEBUG_FORCE_WEATHER: WeatherType | null = null;
+/** 미끄러짐(슬라이드) 상태를 만든다 — 미끄러운 연잎/빗길 착지와 수영 복귀가 공유. */
+function makeSlide(dir: number, slideDist: number) {
+  const speed = (LILY.SLIDE_SPEED_COEF * slideDist) / LILY.SLIDE_DURATION; // ease-out 보정
+  return {
+    vx: Math.cos(dir) * speed,
+    vz: Math.sin(dir) * speed,
+    remaining: LILY.SLIDE_DURATION,
+    duration: LILY.SLIDE_DURATION,
+  };
+}
+
 /**
  * 게임의 메인 시뮬레이션 루프.
  *
@@ -1010,16 +1021,9 @@ export default function LilyPadManager({ paused }: Props) {
         ),
       );
       // 연잎 반지름 대비: 짧은 점프 25% ~ 긴 점프 70%
-      const slideDist = pad.radius * (0.25 + momentum * 0.45);
-
-      const SLIDE_DURATION = 0.85;
-      const initialSpeed = (2.5 * slideDist) / SLIDE_DURATION; // ease-out 보정
-      slideRef.current = {
-        vx: Math.cos(aimDirRef.current) * initialSpeed,
-        vz: Math.sin(aimDirRef.current) * initialSpeed,
-        remaining: SLIDE_DURATION,
-        duration: SLIDE_DURATION,
-      };
+      const slideDist =
+        pad.radius * (LILY.SLIDE_BASE_RATIO + momentum * LILY.SLIDE_MOMENTUM_RATIO);
+      slideRef.current = makeSlide(aimDirRef.current, slideDist);
     }
     if (pad.type === "rotating") {
       const dir = pad.rotationDirection ?? 1;
@@ -1173,15 +1177,8 @@ export default function LilyPadManager({ paused }: Props) {
       );
     } else if (origPad.type === "slippery") {
       // 미끄러운 연잎: 모멘텀 없는 최소 슬라이드
-      const slideDist = origPad.radius * 0.25;
-      const SLIDE_DURATION = 0.85;
-      const speed = (2.5 * slideDist) / SLIDE_DURATION;
-      slideRef.current = {
-        vx: Math.cos(aimDirRef.current) * speed,
-        vz: Math.sin(aimDirRef.current) * speed,
-        remaining: SLIDE_DURATION,
-        duration: SLIDE_DURATION,
-      };
+      const slideDist = origPad.radius * LILY.SLIDE_BASE_RATIO;
+      slideRef.current = makeSlide(aimDirRef.current, slideDist);
     } else if (origPad.type === "rotating") {
       // 회전 연잎: 다음 점프 방향 편향 적용
       const dir = origPad.rotationDirection ?? 1;

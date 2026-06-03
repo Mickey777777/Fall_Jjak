@@ -67,6 +67,11 @@ export const LILY = {
   // 이동 연잎 위치 공식 sin(t*freq)*amp 의 기본값 (개별 pad에 amplitude/frequency가 없을 때)
   MOVING_DEFAULT_AMP: 1.4,
   MOVING_DEFAULT_FREQ: 0.8,
+  // 미끄러운 연잎/빗길 슬라이드
+  SLIDE_DURATION: 0.85, // 슬라이드 지속(초)
+  SLIDE_SPEED_COEF: 2.5, // 초기 속도 = COEF * slideDist / DURATION (ease-out 보정)
+  SLIDE_BASE_RATIO: 0.25, // 슬라이드 거리 하한 (연잎 반지름 대비)
+  SLIDE_MOMENTUM_RATIO: 0.45, // 점프 모멘텀에 비례해 추가되는 거리 (반지름 대비)
 };
 
 // ──────────────────────────────────────────────
