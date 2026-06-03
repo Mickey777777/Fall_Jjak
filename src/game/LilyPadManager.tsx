@@ -35,23 +35,12 @@ import type {
 } from "./types";
 import { playComboBreak, playComboFreeze, playComboUp, playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring, playWhoosh } from "./sound";
 import { gameNow, gameNowMs } from "./gameClock";
-// 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
-const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
+import { DEBUG } from "./debugConfig";
 
 interface Props {
   paused: boolean;
 }
-// 🧪 디버그: 특정 파리(아이템)만 스폰 + 초반부터 항상 등장 (예: "swim" → 오라/수영 테스트). 끝나면 null로
-const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
-// 🧪 디버그: 적(새/물고기) 항상 스폰, obstacle 제외 (테스트 끝나면 false로)
-const DEBUG_ALWAYS_SPAWN_ENEMY = false;
-// 🧪 디버그: 특정 적만 스폰 + 초반부터 항상 등장 ("fish"/"bird"/"obstacle"). 끝나면 null로
-// (fish+bird 둘 다 한꺼번에 보려면 이 값을 null로 두고 DEBUG_ALWAYS_SPAWN_ENEMY=true)
-const DEBUG_FORCE_ENEMY_TYPE: EnemyData["type"] | null = null;
-// 🧪 디버그: 게임 시작 시 들고 시작할 버프 (예: ["swim"] → 수영 부활 테스트). 끝나면 [] 로
-const DEBUG_START_BUFFS: BuffType[] = [];
-// 🧪 디버그: 날씨 고정 (예: "rain" → 폭우/번개 테스트). 자동 사이클 중단. 끝나면 null로
-const DEBUG_FORCE_WEATHER: WeatherType | null = null;
+
 /** 미끄러짐(슬라이드) 상태를 만든다 — 미끄러운 연잎/빗길 착지와 수영 복귀가 공유. */
 function makeSlide(dir: number, slideDist: number) {
   const speed = (LILY.SLIDE_SPEED_COEF * slideDist) / LILY.SLIDE_DURATION; // ease-out 보정
@@ -179,18 +168,18 @@ export default function LilyPadManager({ paused }: Props) {
 
   // 🧪 디버그: 게임 시작 시 버프 부여 + 날씨 고정. 컴포넌트는 runId마다 리마운트되므로 매 게임 1회 실행
   useEffect(() => {
-    for (const t of DEBUG_START_BUFFS) {
+    for (const t of DEBUG.startBuffs) {
       if (t === "swim") addBuff({ type: "swim", remaining: BUFF.ONE_SHOT });
       else if (t === "rangeUp") addBuff({ type: "rangeUp", remaining: BUFF.ONE_SHOT });
       else if (t === "scoreBoost") addBuff({ type: "scoreBoost", remaining: BUFF.ONE_SHOT });
       else if (t === "comboFreeze") addBuff({ type: "comboFreeze", remaining: BUFF.ONE_SHOT });
     }
-    if (DEBUG_FORCE_WEATHER) {
+    if (DEBUG.forceWeather) {
       const wind =
-        DEBUG_FORCE_WEATHER === "wind"
+        DEBUG.forceWeather === "wind"
           ? { direction: (Math.random() - 0.5) * Math.PI, strength: 0.8 }
           : { direction: 0, strength: 0 };
-      setWeather(DEBUG_FORCE_WEATHER, wind);
+      setWeather(DEBUG.forceWeather, wind);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -669,7 +658,7 @@ export default function LilyPadManager({ paused }: Props) {
     // 날씨 타이머 — 단, 드래그(충전)로 점프를 조준 중일 땐 날씨 변경을 미룬다.
     // 이미 점프를 결정한 상태에서 바람 등이 바뀌면 불공평하게 작용하기 때문.
     weatherTimer.current += dt;
-    if (!DEBUG_FORCE_WEATHER && weatherTimer.current >= nextWeatherIn.current && !chargingRef.current) {
+    if (!DEBUG.forceWeather && weatherTimer.current >= nextWeatherIn.current && !chargingRef.current) {
       const current = useGameStore.getState().weather;
       const next = pickWeather(current, Math.random);
       const wind =
@@ -1249,13 +1238,13 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.abs(desiredDz) > maxDz) {
           lat = lastZ + Math.sign(desiredDz) * maxDz;
         }
-        let type = DEBUG_FORCE_PAD_TYPE ?? pickPadType(diff, Math.random);
+        let type = DEBUG.forcePadType ?? pickPadType(diff, Math.random);
 
-        if (!DEBUG_FORCE_PAD_TYPE && (type === "spring" || type === "trap")) {
+        if (!DEBUG.forcePadType && (type === "spring" || type === "trap")) {
           type = "basic";
         }
         // 점수가 높아질수록 basic을 특수 연잎으로 바꿈 (trap 제외)
-        if (type === "basic" && !DEBUG_FORCE_PAD_TYPE) {
+        if (type === "basic" && !DEBUG.forcePadType) {
           const specialChance = Math.min(0.6, 0.1 + score / 1500);
           if (Math.random() < specialChance) {
             const specials: LilyPadData["type"][] = [
@@ -1327,11 +1316,11 @@ export default function LilyPadManager({ paused }: Props) {
 
         // 적 스폰
         const enemySpawnProb =
-          DEBUG_ALWAYS_SPAWN_ENEMY || DEBUG_FORCE_ENEMY_TYPE ? 1 : enemyProb(diff);
+          DEBUG.alwaysSpawnEnemy || DEBUG.forceEnemyType ? 1 : enemyProb(diff);
         if (Math.random() < enemySpawnProb) {
-          const roll = DEBUG_ALWAYS_SPAWN_ENEMY ? Math.random() * 0.75 : Math.random();
+          const roll = DEBUG.alwaysSpawnEnemy ? Math.random() * 0.75 : Math.random();
           const type: EnemyData["type"] =
-            DEBUG_FORCE_ENEMY_TYPE ??
+            DEBUG.forceEnemyType ??
             (roll < 0.4 ? "fish" : roll < 0.75 ? "bird" : "obstacle");
           const enemy: EnemyData = {
             id: ++enemyIdRef.current,
@@ -1348,11 +1337,11 @@ export default function LilyPadManager({ paused }: Props) {
           setEnemies((es) => [...es, enemy]);
         }
         // 아이템 스폰 — 디버그로 타입을 강제하면 매 연잎마다 항상 스폰 (물고기 디버그와 동일)
-        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 1 : 0.13;
+        const itemChance = DEBUG.forceItemType ? 1 : 0.13;
         if (Math.random() < itemChance) {
           const r = Math.random();
           const t: ItemData["type"] =
-            DEBUG_FORCE_ITEM_TYPE ??
+            DEBUG.forceItemType ??
             (r < 0.45
               ? "rangeUp"
               : r < 0.65
