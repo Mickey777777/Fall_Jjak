@@ -108,7 +108,6 @@ export default function LilyPadManager({ paused }: Props) {
   // 수영 부활 전용 물보라 — splashAt(죽음 신호)과 분리 (isDead 트리거 방지)
   const [swimSplashAt, setSwimSplashAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [launchAt, setLaunchAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
-  const [comboBurst, setComboBurst] = useState<{ x: number; z: number; mult: number; tier: number; bornAt: number } | null>(null);
   const [comboBreakAt, setComboBreakAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [crocSnapAt, setCrocSnapAt] = useState<{ x: number; z: number; cx: number; cz: number; bornAt: number } | null>(null);
 
@@ -881,13 +880,8 @@ export default function LilyPadManager({ paused }: Props) {
     const comboAfter = useGameStore.getState().combo;
     if (comboMultiplier(comboAfter) > comboMultiplier(combo)) {
       const tier = Math.floor(comboAfter / 5);
-      setComboBurst({
-        x: pad.position[0],
-        z: pad.position[2],
-        mult: comboMultiplier(comboAfter),
-        tier,
-        bornAt: performance.now(),
-      });
+      // 화면 전체 랭크업 연출 트리거 (HUD가 구독)
+      useGameStore.getState().triggerComboRankUp(tier, comboMultiplier(comboAfter));
       playComboUp(tier);
       // 등급 높을수록 약간 강한 카메라 펀치
       shakeRef.current = Math.max(shakeRef.current, 0.2 + Math.min(0.25, tier * 0.03));
@@ -1456,7 +1450,6 @@ export default function LilyPadManager({ paused }: Props) {
         splashAt={splashAt}
         swimSplashAt={swimSplashAt}
         launchAt={launchAt}
-        comboBurst={comboBurst}
         comboBreakAt={comboBreakAt}
         crocSnapAt={crocSnapAt}
       />

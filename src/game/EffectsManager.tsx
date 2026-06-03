@@ -19,7 +19,6 @@ interface Props {
   splashAt: { x: number; z: number; bornAt: number } | null;
   swimSplashAt: { x: number; z: number; bornAt: number } | null;
   launchAt: { x: number; z: number; bornAt: number } | null;
-  comboBurst: { x: number; z: number; mult: number; tier: number; bornAt: number } | null;
   comboBreakAt: { x: number; z: number; bornAt: number } | null;
   crocSnapAt: { x: number; z: number; cx: number; cz: number; bornAt: number } | null;
 }
@@ -53,7 +52,6 @@ export default function EffectsManager({
   splashAt,
   swimSplashAt,
   launchAt,
-  comboBurst,
   comboBreakAt,
   crocSnapAt,
 }: Props) {
@@ -155,7 +153,6 @@ export default function EffectsManager({
       {splashAt ? <SplashEffect splash={splashAt} /> : null}
       {swimSplashAt ? <SplashEffect key={swimSplashAt.bornAt} splash={swimSplashAt} /> : null}
       {launchAt ? <LaunchEffect key={launchAt.bornAt} launch={launchAt} /> : null}
-      {comboBurst ? <ComboBurst key={comboBurst.bornAt} burst={comboBurst} /> : null}
       {comboBreakAt ? <ComboBreak key={comboBreakAt.bornAt} brk={comboBreakAt} /> : null}
       {crocSnapAt ? <CrocSnapEffect snap={crocSnapAt} /> : null}
     </group>
@@ -686,144 +683,6 @@ function SwimWake({ active, x, z }: { active: boolean; x: number; z: number }) {
             transparent
             opacity={0}
             depthWrite={false}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-// ──────── 콤보 등급 상승 이펙트 (배율이 오른 순간의 축하 버스트) ────────
-const COMBO_DUR = 950;
-const COMBO_SHARDS = 16;
-const COMBO_RINGS = 2;
-const COMBO_SHARD_PARAMS = Array.from({ length: COMBO_SHARDS }, (_, i) => ({
-  angle: (i / COMBO_SHARDS) * Math.PI * 2,
-  maxDist: 0.9 + (i % 4) * 0.3,
-  rise: 0.6 + (i % 3) * 0.25,
-  scaleX: 0.14 + (i % 3) * 0.04,
-}));
-
-// 등급(배율)별 색 escalation: 흰 → 금 → 주황 → 핑크/보라
-function tierColors(mult: number) {
-  if (mult < 1.4) return { ring: "#fff5b0", spark: "#ffe98a", flash: "#ffffff" };
-  if (mult < 1.8) return { ring: "#ffd84d", spark: "#ffc23d", flash: "#fff3c0" };
-  if (mult < 2.2) return { ring: "#ff9b3d", spark: "#ff7a2d", flash: "#ffd9a0" };
-  return { ring: "#ff5bd0", spark: "#9b6bff", flash: "#ffd0f4" };
-}
-
-function ComboBurst({
-  burst,
-}: {
-  burst: { x: number; z: number; mult: number; tier: number; bornAt: number };
-}) {
-  const colors = tierColors(burst.mult);
-  const intensity = 0.8 + Math.min(1, burst.tier / 8) * 0.7; // 등급 높을수록 크게
-  const groupRef = useRef<Group>(null);
-  const flashRef = useRef<Mesh>(null);
-  const flashMatRef = useRef<MeshBasicMaterial>(null);
-  const ringRefs = useRef<(Mesh | null)[]>([]);
-  const ringMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
-  const shardRefs = useRef<(Mesh | null)[]>([]);
-  const shardMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
-
-  useFrame(() => {
-    const age = (performance.now() - burst.bornAt) / COMBO_DUR;
-    const grp = groupRef.current;
-    if (grp) grp.visible = age <= 1.05;
-    if (age > 1.05) return;
-
-    // 중앙 플래시 (0~0.2)
-    if (flashRef.current && flashMatRef.current) {
-      const ft = age / 0.2;
-      flashRef.current.scale.setScalar((1 + ft * 4) * intensity);
-      flashMatRef.current.opacity = Math.max(0, (1 - ft) * 0.85);
-    }
-
-    // 위로 떠오르는 색 링
-    for (let i = 0; i < COMBO_RINGS; i++) {
-      const m = ringRefs.current[i];
-      const mat = ringMatRefs.current[i];
-      if (!m || !mat) continue;
-      const delay = i * 0.12;
-      const t = Math.min(1, Math.max(0, age - delay) / (1 - delay));
-      m.scale.setScalar((0.2 + t * (3.8 + i * 1.2)) * intensity);
-      m.position.y = 0.12 + t * 0.9; // 떠오름
-      mat.opacity = Math.max(0, (1 - t * t) * (0.72 - i * 0.15));
-    }
-
-    // 방사형 반짝이 (위로 솟구쳤다 흩어짐)
-    for (let i = 0; i < COMBO_SHARDS; i++) {
-      const s = shardRefs.current[i];
-      const mat = shardMatRefs.current[i];
-      if (!s || !mat) continue;
-      const { angle, maxDist, rise, scaleX } = COMBO_SHARD_PARAMS[i];
-      const p = Math.min(1, age / 0.7);
-      const ease = 1 - (1 - p) * (1 - p); // ease-out
-      const dist = ease * maxDist * intensity;
-      const y = 0.3 + Math.sin(p * Math.PI) * (rise + 0.3) * intensity;
-      s.position.set(
-        burst.x + Math.cos(angle) * dist,
-        y,
-        burst.z + Math.sin(angle) * dist,
-      );
-      s.rotation.z = angle + age * 4;
-      s.scale.set(scaleX * 1.6, scaleX, scaleX);
-      mat.opacity = Math.max(0, 1 - age / 0.82);
-    }
-  });
-
-  return (
-    <group ref={groupRef}>
-      {/* 중앙 플래시 */}
-      <mesh
-        ref={flashRef}
-        position={[burst.x, 0.35, burst.z]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <circleGeometry args={[0.45, 20]} />
-        <meshBasicMaterial
-          ref={flashMatRef}
-          color={colors.flash}
-          transparent
-          opacity={0.85}
-          depthWrite={false}
-        />
-      </mesh>
-
-      {/* 떠오르는 링 */}
-      {Array.from({ length: COMBO_RINGS }).map((_, i) => (
-        <mesh
-          key={`cbr${i}`}
-          ref={(el) => { ringRefs.current[i] = el; }}
-          position={[burst.x, 0.12, burst.z]}
-          rotation={[-Math.PI / 2, 0, 0]}
-        >
-          <ringGeometry args={[0.1, 0.22, 32]} />
-          <meshBasicMaterial
-            ref={(m) => { ringMatRefs.current[i] = m; }}
-            color={colors.ring}
-            transparent
-            opacity={0.72}
-            depthWrite={false}
-          />
-        </mesh>
-      ))}
-
-      {/* 방사형 반짝이 */}
-      {COMBO_SHARD_PARAMS.map((_, i) => (
-        <mesh
-          key={`cbs${i}`}
-          ref={(el) => { shardRefs.current[i] = el; }}
-          position={[burst.x, 0.3, burst.z]}
-          rotation={[0, 0, 0]}
-        >
-          <boxGeometry args={[1, 1, 1]} />
-          <meshBasicMaterial
-            ref={(m) => { shardMatRefs.current[i] = m; }}
-            color={colors.spark}
-            transparent
-            opacity={0.9}
           />
         </mesh>
       ))}

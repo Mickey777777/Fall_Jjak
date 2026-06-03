@@ -109,6 +109,35 @@ body {
   background: radial-gradient(ellipse at 50% 28%, rgba(235, 242, 255, 0.95), rgba(200, 220, 255, 0.5) 55%, rgba(180, 205, 255, 0.2));
 }
 
+/* ──────── 콤보 랭크업 — 화면 전체 금빛 반짝 ──────── */
+.rankup-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+  overflow: hidden;
+}
+
+/* 테두리에서 안쪽으로 번졌다 사라지는 금빛 글로우 */
+.rankup-burst {
+  position: absolute;
+  inset: 0;
+  /* 중앙은 투명, 가장자리로 갈수록 금빛 — 테두리가 빛나는 느낌 */
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 52%,
+    rgba(255, 245, 176, 0.1) 74%,
+    rgba(255, 219, 110, 0.32) 100%
+  );
+  box-shadow: inset 0 0 110px rgba(255, 219, 110, 0.38);
+  animation: rankupBurst 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes rankupBurst {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 
 /* 좌상단 큰 점수 */
 .score-big {

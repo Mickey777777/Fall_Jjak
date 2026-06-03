@@ -68,6 +68,8 @@ export default function HUD() {
       {lightningFlash > 0 && (
         <div className="lightning-flash" style={{ opacity: lightningFlash * 0.55 }} />
       )}
+      {/* 콤보 랭크업 — 화면 전체 연출 */}
+      <ComboRankUpOverlay />
       {crocDanger > 0 && (
         <>
           <div
@@ -187,6 +189,33 @@ export default function HUD() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+const RANKUP_DUR = 900; // ms — CSS 애니메이션 길이와 일치
+
+/**
+ * 콤보 등급이 오른 순간 화면 전체에 번지는 금빛 반짝.
+ * 스토어의 comboRankUpAt 타임스탬프를 구독해, 값이 바뀌면 잠깐 표시했다 사라진다.
+ * key에 타임스탬프를 줘 연속 발동 시에도 CSS 애니메이션이 매번 재시작된다.
+ */
+function ComboRankUpOverlay() {
+  const at = useGameStore((s) => s.comboRankUpAt);
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    if (at === 0) return;
+    setShown(at);
+    const id = window.setTimeout(() => setShown(0), RANKUP_DUR);
+    return () => window.clearTimeout(id);
+  }, [at]);
+
+  if (shown === 0) return null;
+
+  return (
+    <div className="rankup-overlay" key={shown}>
+      <div className="rankup-burst" />
     </div>
   );
 }

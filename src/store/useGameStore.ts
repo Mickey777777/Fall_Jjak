@@ -95,6 +95,11 @@ interface GameState {
   /** 가까운 번개 발생 타임스탬프 — LilyPadManager가 감지해 카메라 흔들림 */
   lightningShakeAt: number;
   setLightningShakeAt: (v: number) => void;
+  /** 콤보 등급(배율) 상승 이벤트 — 화면 전체 랭크업 연출용. at은 트리거 타임스탬프(0이면 없음) */
+  comboRankUpAt: number;
+  comboRankTier: number;
+  comboRankMult: number;
+  triggerComboRankUp: (tier: number, mult: number) => void;
 }
 
 const initialRunState = {
@@ -120,6 +125,9 @@ const initialRunState = {
   comboIdleWarn: 0,
   lightningFlash: 0,
   lightningShakeAt: 0,
+  comboRankUpAt: 0,
+  comboRankTier: 0,
+  comboRankMult: 1,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -220,4 +228,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   setComboIdleWarn: (v) => set({ comboIdleWarn: v }),
   setLightningFlash: (v) => set({ lightningFlash: v }),
   setLightningShakeAt: (v) => set({ lightningShakeAt: v }),
+  triggerComboRankUp: (tier, mult) =>
+    set({ comboRankUpAt: performance.now(), comboRankTier: tier, comboRankMult: mult }),
 }));
