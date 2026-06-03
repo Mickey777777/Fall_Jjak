@@ -13,7 +13,7 @@ import BackgroundDecor from "./BackgroundDecor";
 import CrocEnemy, { SHOW_DIST as CROC_SHOW_DIST, KILL_DIST as CROC_KILL_DIST } from "./CrocEnemy";
 
 import { useGameStore } from "../store/useGameStore";
-import { ENEMY, JUMP, LILY, WORLD, SCORE as SCORECONST } from "./constants";
+import { BUFF, ENEMY, JUMP, LILY, WORLD, SCORE as SCORECONST } from "./constants";
 import {
   difficultyOf,
   enemyProb,
@@ -169,10 +169,10 @@ export default function LilyPadManager({ paused }: Props) {
   // 🧪 디버그: 게임 시작 시 버프 부여 + 날씨 고정. 컴포넌트는 runId마다 리마운트되므로 매 게임 1회 실행
   useEffect(() => {
     for (const t of DEBUG_START_BUFFS) {
-      if (t === "swim") addBuff({ type: "swim", remaining: 9999 });
-      else if (t === "rangeUp") addBuff({ type: "rangeUp", remaining: 999 });
-      else if (t === "scoreBoost") addBuff({ type: "scoreBoost", remaining: 999 });
-      else if (t === "comboFreeze") addBuff({ type: "comboFreeze", remaining: 9999 });
+      if (t === "swim") addBuff({ type: "swim", remaining: BUFF.ONE_SHOT });
+      else if (t === "rangeUp") addBuff({ type: "rangeUp", remaining: BUFF.ONE_SHOT });
+      else if (t === "scoreBoost") addBuff({ type: "scoreBoost", remaining: BUFF.ONE_SHOT });
+      else if (t === "comboFreeze") addBuff({ type: "comboFreeze", remaining: BUFF.ONE_SHOT });
     }
     if (DEBUG_FORCE_WEATHER) {
       const wind =
@@ -219,7 +219,7 @@ export default function LilyPadManager({ paused }: Props) {
       const hasRangeUp = useGameStore
         .getState()
         .buffs.some((b) => b.type === "rangeUp");
-      const maxDist = JUMP.MAX_DISTANCE * (hasRangeUp ? 1.3 : 1);
+      const maxDist = JUMP.MAX_DISTANCE * (hasRangeUp ? BUFF.RANGE_MULT : 1);
       const dist = pixelsToDistance(px, maxDist);
       chargeDistanceRef.current = dist;
       setChargeDistance(dist);
@@ -312,12 +312,13 @@ export default function LilyPadManager({ paused }: Props) {
               bornAt: gameNowMs(),
               score: gained,
             });
-            if (it.type === "swim") addBuff({ type: "swim", remaining: 9999 });
-            if (it.type === "rangeUp") addBuff({ type: "rangeUp", remaining: 8 });
+            if (it.type === "swim") addBuff({ type: "swim", remaining: BUFF.ONE_SHOT });
+            if (it.type === "rangeUp")
+              addBuff({ type: "rangeUp", remaining: BUFF.DURATION.rangeUp });
             if (it.type === "scoreBoost")
-              addBuff({ type: "scoreBoost", remaining: 6 });
+              addBuff({ type: "scoreBoost", remaining: BUFF.DURATION.scoreBoost });
             // 콤보 프리징 — 시간제한 없는 1회성 (swim처럼 remaining 큰 값)
-            if (it.type === "comboFreeze") addBuff({ type: "comboFreeze", remaining: 9999 });
+            if (it.type === "comboFreeze") addBuff({ type: "comboFreeze", remaining: BUFF.ONE_SHOT });
             playSlurp();
             return { ...it, collected: true, collectedAt: gameNowMs() };
           }
@@ -1396,7 +1397,7 @@ export default function LilyPadManager({ paused }: Props) {
   if (!jumpPlanRef.current) {
     const aimDir = aimDirRef.current;
     const buffs = useGameStore.getState().buffs;
-    const rangeBonus = buffs.find((b) => b.type === "rangeUp") ? 1.3 : 1;
+    const rangeBonus = buffs.find((b) => b.type === "rangeUp") ? BUFF.RANGE_MULT : 1;
     const maxFwd = JUMP.MAX_DISTANCE * rangeBonus + 2;
     let best = Infinity;
     const cosA = Math.cos(aimDir);

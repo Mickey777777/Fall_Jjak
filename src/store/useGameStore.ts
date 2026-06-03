@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { STORAGE } from "../game/constants";
+import { BUFF, STORAGE } from "../game/constants";
 import { gameNowMs } from "../game/gameClock";
 import type {
   ActiveBuff,
@@ -162,7 +162,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   addScore: (raw, judgment, keepCombo = false) => {
     const { combo, buffs, score, maxCombo } = get();
     // 콤보 배율 계산은 ScoreSystem 쪽에서 처리하지만, 기본 합산은 여기서.
-    const boost = buffs.find((b) => b.type === "scoreBoost") ? 1.5 : 1.0;
+    const boost = buffs.find((b) => b.type === "scoreBoost") ? BUFF.SCORE_MULT : 1.0;
     const gained = Math.round(raw * boost);
     // keepCombo(콤보 프리징 발동): 판정과 무관하게 현재 콤보를 그대로 유지
     const nextCombo = keepCombo

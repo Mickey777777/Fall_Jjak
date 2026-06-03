@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { CanvasTexture, LinearFilter } from "three";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { useGameStore } from "../store/useGameStore";
-import { JUMP } from "./constants";
+import { BUFF, JUMP } from "./constants";
 import { gameNowMs } from "./gameClock";
 import type { JudgmentPopup } from "./types";
 
@@ -72,7 +72,7 @@ export default function EffectsManager({
 
     const buffs = useGameStore.getState().buffs;
     const rangeBuff = buffs.find((b) => b.type === "rangeUp");
-    const rangeBonus = rangeBuff ? 1.3 : 1;
+    const rangeBonus = rangeBuff ? BUFF.RANGE_MULT : 1;
     const rangeBlink =
       rangeBuff && rangeBuff.remaining < 2
         ? Math.sin(gameNowMs() * 0.02) > 0

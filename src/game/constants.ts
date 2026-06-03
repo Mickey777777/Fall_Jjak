@@ -100,6 +100,24 @@ export const SCORE = {
 };
 
 // ──────────────────────────────────────────────
+// 버프 (지속시간 / 배율)
+// ──────────────────────────────────────────────
+export const BUFF = {
+  // 시간제한 버프의 지속시간(초)
+  DURATION: {
+    rangeUp: 8,
+    scoreBoost: 6,
+  },
+  // 시간제한 없는 1회성 버프(swim/comboFreeze). tickBuffs가 remaining을 감소시켜도
+  // 만료되지 않으며, HUD 타이머 표시(remaining < 9000)에서도 자연히 숨겨진다.
+  ONE_SHOT: Number.POSITIVE_INFINITY,
+  // rangeUp: 점프 "최댓값"만 늘리는 배율
+  RANGE_MULT: 1.3,
+  // scoreBoost: 획득 점수 배율
+  SCORE_MULT: 1.5,
+};
+
+// ──────────────────────────────────────────────
 // 동적 난이도
 // ──────────────────────────────────────────────
 export const DIFFICULTY = {
