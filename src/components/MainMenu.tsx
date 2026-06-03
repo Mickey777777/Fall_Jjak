@@ -154,7 +154,7 @@ export default function MainMenu() {
     <div className="overlay menu">
       <div className="logo">
         <div className="logo-jp">「 폴 짝 」</div>
-        <div className="logo-sub">Fall Jjak — 끝없는 연잎 점프</div>
+        <div className="logo-sub">Fall Jjak</div>
       </div>
 
       <div className="card">
