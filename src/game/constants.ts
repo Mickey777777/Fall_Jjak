@@ -120,6 +120,12 @@ export const DIFFICULTY = {
 export const ENEMY = {
   FISH_LUNGE_HEIGHT: 1.6, // 이보다 낮게 날면 잡힘
   BIRD_DIVE_HEIGHT: 2.6, // 이보다 높게 날면 잡힘
+  // 물고기 히트박스 — 머리-꼬리(x)로 길고 옆(z)으로 좁은 몸에 맞춘 타원 (원형은 옆으로 과대)
+  FISH_HALF_LEN: 0.85, // x (머리-꼬리 방향) 반길이
+  FISH_HALF_WID: 0.55, // z (옆) 반너비 — 몸(±0.2) + 도약 시 솟구침·개구리 몸 여유
+  // 새 히트박스 — 날개 폭(z)이 몸 길이(x)보다 넓은 몸에 맞춘 타원 (가로로 넓음)
+  BIRD_HALF_LEN: 1.0, // x (몸통-꼬리) 반길이
+  BIRD_HALF_WID: 1.25, // z (날개 폭) 반너비
   // 새 좌우 패트롤 — 렌더와 충돌이 공유 (진동수 / amplitude 기본값)
   BIRD_PATROL_FREQ: 1.1,
   BIRD_DEFAULT_AMP: 1.5,
@@ -127,6 +133,13 @@ export const ENEMY = {
   CROC_SPEED: 1.00, // m/s 기본 속도 (점수 0 기준). 초반은 넉넉, 머뭇대면 가끔 등장
   CROC_SPEED_MAX: 2.60, // m/s 최대 속도 (CROC_SPEED_MAX_SCORE 도달 시)
   CROC_SPEED_MAX_SCORE: 3000, // 이 점수에서 악어 속도가 CROC_SPEED_MAX에 도달
+  // 환경 장애물(나뭇가지 더미) — 시각이 비스듬히 누운 길쭉한 막대라 원형이 아닌
+  // 방향성 박스(OBB)로 판정해 "보이는 막대"와 히트박스를 일치시킨다.
+  // YAW는 EnemyManager 렌더의 메인 박스 rotation[1](0.4)과 맞춤.
+  OBSTACLE_YAW: 0.4,
+  OBSTACLE_HALF_LEN: 0.95, // 막대 길이 방향 반(half) 길이 (시각 ~0.9 + 약간의 여유)
+  OBSTACLE_HALF_WID: 0.45, // 막대 폭 방향 반(half) 너비 (시각 ~0.3 + 개구리 몸 여유)
+  OBSTACLE_BLOCK_HEIGHT: 2.2, // 이 높이 미만이면 가로막힘
 };
 
 // ──────────────────────────────────────────────

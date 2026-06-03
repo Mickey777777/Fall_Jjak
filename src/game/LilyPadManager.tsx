@@ -44,12 +44,12 @@ interface Props {
 // 🧪 디버그: 특정 파리(아이템)만 스폰 + 초반부터 항상 등장 (예: "swim" → 오라/수영 테스트). 끝나면 null로
 const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
 // 🧪 디버그: 적(새/물고기) 항상 스폰, obstacle 제외 (테스트 끝나면 false로)
-const DEBUG_ALWAYS_SPAWN_ENEMY = false;
+const DEBUG_ALWAYS_SPAWN_ENEMY = true;
 // 🧪 디버그: 특정 적만 스폰 + 초반부터 항상 등장 ("fish"/"bird"/"obstacle"). 끝나면 null로
 // (fish+bird 둘 다 한꺼번에 보려면 이 값을 null로 두고 DEBUG_ALWAYS_SPAWN_ENEMY=true)
 const DEBUG_FORCE_ENEMY_TYPE: EnemyData["type"] | null = null;
 // 🧪 디버그: 게임 시작 시 들고 시작할 버프 (예: ["swim"] → 수영 부활 테스트). 끝나면 [] 로
-const DEBUG_START_BUFFS: BuffType[] = ["comboFreeze"];
+const DEBUG_START_BUFFS: BuffType[] = [];
 // 🧪 디버그: 날씨 고정 (예: "rain" → 폭우/번개 테스트). 자동 사이클 중단. 끝나면 null로
 const DEBUG_FORCE_WEATHER: WeatherType | null = null;
 /**
