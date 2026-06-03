@@ -13,6 +13,20 @@ export function birdLiveZ(enemy: EnemyData, now: number): number {
   );
 }
 
+/** 물고기 도약 정도(0=완전히 잠김, 1=최고로 솟구침) — 렌더와 충돌이 공유. */
+export function fishLeap(enemy: EnemyData, now: number): number {
+  return Math.max(0, Math.sin((now - enemy.spawnTime) * ENEMY.FISH_LEAP_FREQ));
+}
+
+/**
+ * 물고기 본체의 현재 y — 렌더(EnemyManager)와 반드시 같은 공식을 써야
+ * "보이는 물고기"와 히트박스(솟구친 순간만 위협)가 일치한다.
+ */
+export function fishLiveY(enemy: EnemyData, now: number): number {
+  const amp = enemy.amplitude ?? ENEMY.FISH_DEFAULT_AMP;
+  return ENEMY.FISH_REST_Y + fishLeap(enemy, now) * (amp + ENEMY.FISH_LEAP_RISE);
+}
+
 /** 점프 비행 중 적과 닿았는지 확인. 닿았다면 게임오버. */
 export function checkAirborneHit(
   position: { x: number; y: number; z: number },
@@ -26,9 +40,12 @@ export function checkAirborneHit(
     const dx = position.x - e.position[0];
     const dz = position.z - ez;
     if (e.type === "fish") {
-      // 점프 높이가 낮을 때 수면 위로 솟아오름. 물고기는 머리-꼬리(x)로 길고
-      // 옆(z)으로 좁아 원형 대신 타원으로 판정 → 옆을 비껴가면 안 잡힘.
-      if (position.y < ENEMY.FISH_LUNGE_HEIGHT) {
+      // 물고기가 수면 위로 솟구쳐 있을 때(fishLiveY > 수면)만 위협 — 잠겨 있으면 안 잡힘.
+      // 또 머리-꼬리(x)로 길고 옆(z)으로 좁아 원형 대신 타원으로 판정 → 옆을 비껴가면 안 잡힘.
+      if (
+        position.y < ENEMY.FISH_LUNGE_HEIGHT &&
+        fishLiveY(e, now) > ENEMY.FISH_BREACH_Y
+      ) {
         const nx = dx / ENEMY.FISH_HALF_LEN;
         const nz = dz / ENEMY.FISH_HALF_WID;
         if (nx * nx + nz * nz < 1) return e;

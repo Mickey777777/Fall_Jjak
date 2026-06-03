@@ -2,8 +2,8 @@ import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef } from "react";
 import { CanvasTexture } from "three";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
-import { COLORS } from "./constants";
-import { birdLiveZ } from "./CollisionSystem";
+import { COLORS, ENEMY } from "./constants";
+import { birdLiveZ, fishLeap, fishLiveY } from "./CollisionSystem";
 import type { EnemyData } from "./types";
 
 // 물고기 체절별 굽힘 위상/각도 (머리→꼬리)
@@ -37,14 +37,12 @@ function EnemyView({ enemy, now }: { enemy: EnemyData; now: number }) {
     const t = now - enemy.spawnTime;
     if (enemy.type === "fish") {
       // 평소엔 물 평면(y=-0.5) 아래로 완전히 잠겨 보이지 않고(거품·음파로만 위치 암시),
-      // 주기적으로 수면을 뚫고 솟구쳤다 다시 잠긴다. REST_Y는 몸 최고점(+~0.49)까지
-      // 수면 아래에 들어가도록 충분히 낮춘다.
-      const amp = enemy.amplitude ?? 1;
-      const REST_Y = -1.3;
-      const leap = Math.max(0, Math.sin(t * 1.6));
-      ref.current.position.y = REST_Y + leap * (amp + 1.7);
+      // 주기적으로 수면을 뚫고 솟구쳤다 다시 잠긴다.
+      // y는 충돌 판정과 동일한 공식(fishLiveY) 공유 → 보이는 물고기만 피격 판정.
+      const leap = fishLeap(enemy, now);
+      ref.current.position.y = fishLiveY(enemy, now);
       // 솟구칠 때 머리부터 들리고 떨어질 때 머리부터 내리꽂는 포물선 자세 (높이 비례)
-      ref.current.rotation.z = -Math.cos(t * 1.6) * 0.5 * Math.max(0.15, leap);
+      ref.current.rotation.z = -Math.cos(t * ENEMY.FISH_LEAP_FREQ) * 0.5 * Math.max(0.15, leap);
       // 몸을 마디별로 좌우 물결 (S자 헤엄)
       const segs = segRefs.current;
       for (let i = 0; i < segs.length; i++) {

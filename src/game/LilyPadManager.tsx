@@ -1352,7 +1352,7 @@ export default function LilyPadManager({ paused }: Props) {
             type,
             position: [
               maxX - gap * 0.5,
-              type === "fish" ? -0.3 : type === "bird" ? 3.2 : 0.6,
+              type === "fish" ? -0.3 : type === "bird" ? ENEMY.BIRD_SPAWN_Y : 0.6,
               lat * 0.4 + (Math.random() - 0.5) * 1.4,
             ],
             spawnTime: gameNow(),
