@@ -63,6 +63,9 @@ export const LILY = {
   DECORATIVE_DENSITY: 1.4, // 한 메인 연잎당 평균 N개
   BLINK_PERIOD: 2,
   BLINK_VISIBLE_RATIO: 0.5,
+  // 이동 연잎 위치 공식 sin(t*freq)*amp 의 기본값 (개별 pad에 amplitude/frequency가 없을 때)
+  MOVING_DEFAULT_AMP: 1.4,
+  MOVING_DEFAULT_FREQ: 0.8,
 };
 
 // ──────────────────────────────────────────────

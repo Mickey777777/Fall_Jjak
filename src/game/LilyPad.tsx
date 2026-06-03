@@ -3,6 +3,7 @@ import type { MutableRefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { COLORS, LILY, WORLD } from "./constants";
+import { isBlinkVisible, movingPadOffset } from "./CollisionSystem";
 import type { LilyPadData } from "./types";
 
 const CROC_PUSH_RADIUS = 2.5;
@@ -168,10 +169,9 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
     }
 
     if (pad.type === "moving") {
-      const amp = pad.amplitude ?? 1.4;
-      const freq = pad.frequency ?? 0.8;
-      if (pad.axis === "x") x += Math.sin(t * freq) * amp;
-      else z += Math.sin(t * freq) * amp;
+      const offset = movingPadOffset(pad, now);
+      if (pad.axis === "x") x += offset;
+      else z += offset;
     }
     if (pad.type === "blinking" && pad.swimShrinkAt != null) {
       // 수영 복귀 점멸 연잎: swimShrinkAt 이후 삭은 연잎과 동일하게 줄어듦
@@ -180,9 +180,7 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
       ref.current.scale.set(k, k, k);
       y -= (1 - k) * 0.3;
     } else if (pad.type === "blinking" && pad.steppedAt == null) {
-      const cycle = (t % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-      const visible = cycle < LILY.BLINK_VISIBLE_RATIO;
-      const s = visible ? 1 : 0.001;
+      const s = isBlinkVisible(pad, now) ? 1 : 0.001;
       ref.current.scale.set(s, s, s);
     } else if (pad.type === "rotten" && pad.steppedAt != null) {
       const aliveAfterStep = now - pad.steppedAt;

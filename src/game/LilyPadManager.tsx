@@ -24,7 +24,7 @@ import {
   weatherIntervalFor,
 } from "./DifficultySystem";
 import { makeJumpPlan, pixelsToDistance, sampleJump } from "./JumpController";
-import { checkAirborneHit, nearestPad } from "./CollisionSystem";
+import { checkAirborneHit, isBlinkVisible, livePadPosition, movingPadOffset, nearestPad } from "./CollisionSystem";
 import { comboMultiplier, judgeLanding, judgmentText } from "./ScoreSystem";
 import type {
   BuffType,
@@ -589,14 +589,7 @@ export default function LilyPadManager({ paused }: Props) {
       for (const p of pads) {
         if (p.destroyed) continue;
         // 이동 연잎은 현재 시각 위치로 보정
-        let px = p.position[0];
-        let pz = p.position[2];
-        if (p.type === "moving") {
-          const tt = now - p.spawnTime;
-          const offset = Math.sin(tt * (p.frequency ?? 0.8)) * (p.amplitude ?? 1.4);
-          if (p.axis === "x") px += offset;
-          else pz += offset;
-        }
+        const { x: px, z: pz } = livePadPosition(p, now);
         const d = Math.hypot(px - lp.x, pz - lp.z);
         if (d < bestD) {
           bestD = d;
@@ -713,12 +706,7 @@ export default function LilyPadManager({ paused }: Props) {
         const cp = currentPadRef.current;
         const p = pads.find((x) => x.id === cp.padId);
         if (p && p.type === "moving") {
-          const t = now - p.spawnTime;
-          const amp = p.amplitude ?? 1.4;
-          const freq = p.frequency ?? 0.8;
-          const offset = Math.sin(t * freq) * amp;
-          const vx = p.position[0] + (p.axis === "x" ? offset : 0);
-          const vz = p.position[2] + (p.axis === "x" ? 0 : offset);
+          const { x: vx, z: vz } = livePadPosition(p, now);
           frog.current.x = vx + cp.offsetX;
           frog.current.z = vz + cp.offsetZ;
         } else if (!p) {
@@ -772,18 +760,7 @@ export default function LilyPadManager({ paused }: Props) {
       const supportPads = pads
         .filter((p) => !p.destroyed)
         .map((p) => {
-          let pvx = p.position[0];
-          let pvz = p.position[2];
-
-          if (p.type === "moving") {
-            const t = now - p.spawnTime;
-            const amp = p.amplitude ?? 1.4;
-            const freq = p.frequency ?? 0.8;
-            const offset = Math.sin(t * freq) * amp;
-            if (p.axis === "x") pvx += offset;
-            else pvz += offset;
-          }
-
+          const { x: pvx, z: pvz } = livePadPosition(p, now);
           return {
             pad: p,
             x: pvx,
@@ -802,11 +779,8 @@ export default function LilyPadManager({ paused }: Props) {
       // 꺼진 점멸 연잎인지
       const isBlinkingOff = (p: LilyPadData) => {
         if (p.type !== "blinking") return false;
-        if (p.steppedAt != null) return false;
         if (swimStabilizedRef.current.has(p.id)) return false;
-
-        const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-        return cycle >= LILY.BLINK_VISIBLE_RATIO;
+        return !isBlinkVisible(p, now);
       };
 
       // 현재 밟을 수 있는 안전 연잎인지
@@ -883,10 +857,7 @@ export default function LilyPadManager({ paused }: Props) {
     const nowSec = gameNow();
     const padsForCollision = pads.map((p) => {
       if (p.type !== "moving") return p;
-      const t = nowSec - p.spawnTime;
-      const amp = p.amplitude ?? 1.4;
-      const freq = p.frequency ?? 0.8;
-      const offset = Math.sin(t * freq) * amp;
+      const offset = movingPadOffset(p, nowSec);
       const newPos: [number, number, number] =
         p.axis === "x"
           ? [p.position[0] + offset, p.position[1], p.position[2]]
@@ -895,12 +866,7 @@ export default function LilyPadManager({ paused }: Props) {
     });
 
     // 점멸 연잎이 지금 켜져(밟을 수 있게) 보이는 상태인지
-    const blinkVisible = (p: LilyPadData) => {
-      if (p.type !== "blinking" || p.steppedAt != null) return true;
-      const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-      return cycle < LILY.BLINK_VISIBLE_RATIO;
-    };
-    const isSafe = (p: LilyPadData) => p.type !== "trap" && blinkVisible(p);
+    const isSafe = (p: LilyPadData) => p.type !== "trap" && isBlinkVisible(p, nowSec);
 
     // 착지점을 실제로 덮는(dist < radius) 안전 연잎 중 중심에 가장 가까운 것을 고른다.
     // 생존 검사(onPad)와 동일한 기준이라 "점수 획득 ⟺ 연잎 위 ⟺ 생존"이 보장된다.
@@ -1104,20 +1070,15 @@ export default function LilyPadManager({ paused }: Props) {
       const usable = pads.filter((p) => {
         if (p.type === "trap" || p.type === "spring") return false;
         if (p.id === excludePadId && !excludeIsBlinking) return false;
-        if (p.type === "blinking" && p.steppedAt == null && !swimStabilizedRef.current.has(p.id)) {
-          const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-          if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
-        }
+        // 꺼진 점멸 연잎 제외 (단, swim 안정화된 연잎은 켜진 것으로 취급)
+        if (!swimStabilizedRef.current.has(p.id) && !isBlinkVisible(p, nowSec)) return false;
         return true;
       });
 
       // 이동 연잎은 현재 시각 위치로 보정해서 nearestPad에 전달
       const usableWithVisual = usable.map((p) => {
         if (p.type !== "moving") return p;
-        const t = nowSec - p.spawnTime;
-        const amp = p.amplitude ?? 1.4;
-        const freq = p.frequency ?? 0.8;
-        const offset = Math.sin(t * freq) * amp;
+        const offset = movingPadOffset(p, nowSec);
         const newPos: [number, number, number] =
           p.axis === "x"
             ? [p.position[0] + offset, p.position[1], p.position[2]]
@@ -1183,16 +1144,7 @@ export default function LilyPadManager({ paused }: Props) {
     }
 
     // 이동 연잎은 도착 시점의 실제 위치로 보정 (글라이드 중 드리프트)
-    let px = origPad.position[0];
-    let pz = origPad.position[2];
-    if (origPad.type === "moving") {
-      const t = nowSec - origPad.spawnTime;
-      const amp = origPad.amplitude ?? 1.4;
-      const freq = origPad.frequency ?? 0.8;
-      const offset = Math.sin(t * freq) * amp;
-      if (origPad.axis === "x") px += offset;
-      else pz += offset;
-    }
+    const { x: px, z: pz } = livePadPosition(origPad, nowSec);
 
     frog.current.x = px;
     frog.current.z = pz;

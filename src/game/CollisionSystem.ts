@@ -1,5 +1,41 @@
-import { ENEMY } from "./constants";
+import { ENEMY, LILY } from "./constants";
 import type { EnemyData, LilyPadData } from "./types";
+
+/**
+ * 이동 연잎의 현재 시각 위치 오프셋 sin(t*freq)*amp — 렌더(LilyPad)와 충돌/추적
+ * (LilyPadManager)이 반드시 같은 공식을 써야 "보이는 위치 = 판정 위치"가 성립한다.
+ * (birdLiveZ/fishLiveY와 동일한 "렌더·충돌 공유" 규약.)
+ */
+export function movingPadOffset(pad: LilyPadData, now: number): number {
+  const amp = pad.amplitude ?? LILY.MOVING_DEFAULT_AMP;
+  const freq = pad.frequency ?? LILY.MOVING_DEFAULT_FREQ;
+  return Math.sin((now - pad.spawnTime) * freq) * amp;
+}
+
+/** 연잎의 현재 시각 (x, z) — 이동 연잎이면 축 방향으로 오프셋을 더한 값. */
+export function livePadPosition(
+  pad: LilyPadData,
+  now: number,
+): { x: number; z: number } {
+  let x = pad.position[0];
+  let z = pad.position[2];
+  if (pad.type === "moving") {
+    const offset = movingPadOffset(pad, now);
+    if (pad.axis === "x") x += offset;
+    else z += offset;
+  }
+  return { x, z };
+}
+
+/**
+ * 점멸 연잎이 지금 켜져(밟을 수 있게) 있는지 — 렌더/충돌/복귀가 같은 공식을 쓰도록 단일화.
+ * steppedAt(안정화)이 기록된 연잎은 항상 켜진 것으로 본다. 꺼짐이 필요하면 !isBlinkVisible(...).
+ */
+export function isBlinkVisible(pad: LilyPadData, now: number): boolean {
+  if (pad.type !== "blinking" || pad.steppedAt != null) return true;
+  const cycle = ((now - pad.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+  return cycle < LILY.BLINK_VISIBLE_RATIO;
+}
 
 /**
  * 새의 현재(애니메이션 반영) z 위치 — 렌더와 충돌이 반드시 같은 공식을 써야
