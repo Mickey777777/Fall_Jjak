@@ -565,42 +565,7 @@ export default function LilyPadManager({ paused }: Props) {
             return;
           }
         }
-      }
-
-      // 4. 점멸 연잎 검사 (기존)
-      for (const p of pads) {
-        if (p.type !== "blinking") continue;
-        const dx = p.position[0] - fx;
-        const dz = p.position[2] - fz;
-        if (Math.hypot(dx, dz) >= p.radius) continue;
-
-        if (swimStabilizedRef.current.has(p.id)) {
-          // 수영 복귀 점멸 연잎: 1초 안정 → 줄어들기 시작 → ROTTEN_LIFETIME 후 붕괴
-          if (p.steppedAt != null) {
-            const elapsed = now - p.steppedAt;
-            if (elapsed >= 1.0 + LILY.ROTTEN_LIFETIME) {
-              handleFall(frog.current.x, frog.current.z, p.id);
-              return;
-            } else if (elapsed >= 1.0 && p.swimShrinkAt == null) {
-              // 줄어들기 시작 타임스탬프 기록
-              setPads((list) =>
-                list.map((pad) =>
-                  pad.id === p.id ? { ...pad, swimShrinkAt: now } : pad,
-                ),
-              );
-            }
-          }
-          continue;
-        }
-
-        if (p.steppedAt != null) continue; // 정상 착지로 안정화된 연잎
-        const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-        // blinking 꺼진 상태
-        if (cycle >= LILY.BLINK_VISIBLE_RATIO) {
-          handleFall(frog.current.x, frog.current.z, p.id);
-          return;
-        }
-      }
+      }      
 
       // 5. 슬라이드 (기존)
       if (slideRef.current) {
@@ -621,30 +586,103 @@ export default function LilyPadManager({ paused }: Props) {
         s.remaining -= dt;
         if (s.remaining <= 0) slideRef.current = null;
       }
+      // 4~6. 현재 개구리를 받쳐주는 연잎 판정
+      // 겹친 연잎이 있을 수 있으므로, 꺼진 점멸 연잎만 보고 바로 죽이면 안 됨.
+      // 먼저 "현재 위치를 덮는 연잎들"을 모두 모은 뒤,
+      // 그중 하나라도 안전한 연잎이면 생존 처리한다.
+      const finalFx = frog.current.x;
+      const finalFz = frog.current.z;
+      const supportPads = pads
+        .filter((p) => !p.destroyed)
+        .map((p) => {
+          let pvx = p.position[0];
+          let pvz = p.position[2];
 
-      // 6. ★ 연잎 밖으로 나갔는지 검사 — 물 위에 있으면 사망
-      let onPad = false;
-      for (const p of pads) {
-        let pvx = p.position[0];
-        let pvz = p.position[2];
-        if (p.type === "moving") {
-          const t = now - p.spawnTime;
-          const amp = p.amplitude ?? 1.4;
-          const freq = p.frequency ?? 0.8;
-          const offset = Math.sin(t * freq) * amp;
-          if (p.axis === "x") pvx += offset;
-          else pvz += offset;
-        }
-        if (Math.hypot(pvx - frog.current.x, pvz - frog.current.z) < p.radius) {
-          onPad = true;
-          break;
-        }
-      }
-      if (!onPad) {
+          if (p.type === "moving") {
+            const t = now - p.spawnTime;
+            const amp = p.amplitude ?? 1.4;
+            const freq = p.frequency ?? 0.8;
+            const offset = Math.sin(t * freq) * amp;
+            if (p.axis === "x") pvx += offset;
+            else pvz += offset;
+          }
+
+          return {
+            pad: p,
+            x: pvx,
+            z: pvz,
+            dist: Math.hypot(pvx - finalFx, pvz - finalFz),
+          };
+        })
+        .filter((v) => v.dist < v.pad.radius);
+
+      // 어떤 연잎에도 안 올라가 있으면 물에 빠짐
+      if (supportPads.length === 0) {
         handleFall(frog.current.x, frog.current.z);
         return;
       }
+
+      // 꺼진 점멸 연잎인지
+      const isBlinkingOff = (p: LilyPadData) => {
+        if (p.type !== "blinking") return false;
+        if (p.steppedAt != null) return false;
+        if (swimStabilizedRef.current.has(p.id)) return false;
+
+        const cycle = ((now - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+        return cycle >= LILY.BLINK_VISIBLE_RATIO;
+      };
+
+      // 현재 밟을 수 있는 안전 연잎인지
+      const isSupportSafe = (p: LilyPadData) => {
+        if (p.type === "trap") return false;
+        if (isBlinkingOff(p)) return false;
+        return true;
+      };
+
+      // 하나라도 안전한 연잎이 겹쳐 있으면 살아있음.
+      // 예: 일반 연잎 + 꺼진 점멸 연잎이 겹친 경우 → 일반 연잎 때문에 생존.
+      const safeSupport = supportPads.find(({ pad }) => isSupportSafe(pad));
+
+      if (!safeSupport) {
+        // 전부 위험한 연잎이면 죽음.
+        // 꺼진 점멸 연잎 위였으면 그 id를 넘겨서 swim 복귀 로직도 기존처럼 동작하게 함.
+        const blinkOff = supportPads.find(({ pad }) => isBlinkingOff(pad));
+        handleFall(frog.current.x, frog.current.z, blinkOff?.pad.id);
+        return;
+      }
+
+      // swim으로 복귀한 점멸 연잎은 기존처럼 안정화 후 붕괴 처리
+      for (const { pad: p } of supportPads) {
+        if (p.type !== "blinking") continue;
+        if (!swimStabilizedRef.current.has(p.id)) continue;
+
+        if (p.steppedAt != null) {
+          const elapsed = now - p.steppedAt;
+
+          if (elapsed >= 1.0 + LILY.ROTTEN_LIFETIME) {
+            // 단, 이 점멸 연잎 말고 다른 안전 연잎도 같이 밟고 있으면 죽이지 않음
+            const otherSafe = supportPads.some(
+              ({ pad }) => pad.id !== p.id && isSupportSafe(pad),
+            );
+
+            if (!otherSafe) {
+              handleFall(frog.current.x, frog.current.z, p.id);
+              return;
+            }
+          } else if (elapsed >= 1.0 && p.swimShrinkAt == null) {
+            setPads((list) =>
+              list.map((pad) =>
+                pad.id === p.id ? { ...pad, swimShrinkAt: now } : pad,
+              ),
+            );
+          }
+        }
+      }
+
+
+  
     }
+    
     // 연잎/적/아이템 청소 및 보충
     cullAndSpawn();
 
