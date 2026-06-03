@@ -219,6 +219,79 @@ body {
   }
 }
 
+/* ──────── 콤보 프리징 발동 — 콤보 칩 얼음 효과 ──────────
+ * 칩 자체의 animation(comboPop)을 건드리지 않도록 안쪽 숫자에만 적용 →
+ * 클래스가 빠질 때 comboPop이 재생되는 부작용 방지 */
+.combo-chip.frozen .combo-num {
+  display: inline-block;
+  animation: comboFreezeNum 1.05s cubic-bezier(0.16, 1.2, 0.4, 1) both;
+}
+@keyframes comboFreezeNum {
+  0% {
+    transform: scale(1);
+    color: #ffd84d;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  }
+  18% {
+    transform: scale(1.18);
+    color: #e8fbff;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 0 16px rgba(150, 225, 255, 0.95);
+  }
+  70% {
+    color: #b6ecff;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 0 8px rgba(150, 225, 255, 0.5);
+  }
+  100% {
+    transform: scale(1);
+    color: #ffd84d;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* 칩 위에 흩날리는 눈송이 3개 */
+.combo-frost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.frost-flake {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  color: #d6f6ff;
+  filter: drop-shadow(0 0 4px rgba(150, 225, 255, 0.85));
+  opacity: 0;
+}
+.frost-flake.f1 {
+  left: -10px;
+  top: 4px;
+  animation: frostDrift 1s ease-out both;
+}
+.frost-flake.f2 {
+  right: -8px;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  animation: frostDrift 1s ease-out 0.08s both;
+}
+.frost-flake.f3 {
+  left: 50%;
+  top: -12px;
+  width: 13px;
+  height: 13px;
+  animation: frostDriftUp 1s ease-out 0.04s both;
+}
+@keyframes frostDrift {
+  0% { opacity: 0; transform: translateY(-4px) scale(0.5) rotate(0deg); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(16px) scale(1) rotate(140deg); }
+}
+@keyframes frostDriftUp {
+  0% { opacity: 0; transform: translateY(0) scale(0.4) rotate(0deg); }
+  30% { opacity: 1; transform: translateY(-6px) scale(1) rotate(60deg); }
+  100% { opacity: 0; transform: translateY(-22px) scale(0.9) rotate(180deg); }
+}
+
 /* 좌측 하단 날씨 칩 */
 .weather-chip {
   position: absolute;
@@ -604,16 +677,17 @@ button.ghost {
 }
 .help-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
   margin-bottom: 14px;
 }
 .help-tabs button {
-  padding: 11px 12px;
+  padding: 11px 6px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.06);
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
   box-shadow: none;
 }
 .help-tabs button.active {
@@ -648,8 +722,12 @@ button.ghost {
 }
 .help-item-desc {
   font-size: 11px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--ink-soft);
+  /* 한글은 글자 단위로 끊지 말고 띄어쓰기(어절) 단위로 줄바꿈 → 자연스러운 줄나눔 */
+  word-break: keep-all;
+  /* 설명 문자열의 명시적 줄바꿈(\n)을 그대로 렌더 (절 단위로 한 줄씩) */
+  white-space: pre-line;
 }
 .credits {
   position: absolute;

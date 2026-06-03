@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { STORAGE } from "../game/constants";
+import { gameNowMs } from "../game/gameClock";
 import type {
   ActiveBuff,
   GamePhase,
@@ -102,6 +103,9 @@ interface GameState {
   comboRankTier: number;
   comboRankMult: number;
   triggerComboRankUp: (tier: number, mult: number) => void;
+  /** 콤보 프리징 발동 타임스탬프 — HUD 콤보 칩 얼음 연출용(0이면 없음) */
+  comboFreezeAt: number;
+  triggerComboFreeze: () => void;
 }
 
 const initialRunState = {
@@ -130,6 +134,7 @@ const initialRunState = {
   comboRankUpAt: 0,
   comboRankTier: 0,
   comboRankMult: 1,
+  comboFreezeAt: 0,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -190,7 +195,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setChargeDistance: (d) => set({ chargeDistance: d }),
   setArcHeight: (h) => set({ arcHeight: h }),
   setCharging: (c) => set({ isCharging: c }),
-  triggerTongue: (target = null) => set({ tongueAt: performance.now(), tongueTarget: target }),
+  triggerTongue: (target = null) => set({ tongueAt: gameNowMs(), tongueTarget: target }),
 
   setWeather: (w, wind) =>
     set({
@@ -243,4 +248,5 @@ export const useGameStore = create<GameState>((set, get) => ({
   setLightningShakeAt: (v) => set({ lightningShakeAt: v }),
   triggerComboRankUp: (tier, mult) =>
     set({ comboRankUpAt: performance.now(), comboRankTier: tier, comboRankMult: mult }),
+  triggerComboFreeze: () => set({ comboFreezeAt: performance.now() }),
 }));

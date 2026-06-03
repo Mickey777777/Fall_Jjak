@@ -5,13 +5,20 @@ import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { COLORS } from "./constants";
 import { useGameStore } from "../store/useGameStore";
 import { launchBounceY } from "./LilyPad";
+import { gameNow, gameNowMs } from "./gameClock";
 import type { BuffType } from "./types";
 
 // 버프 오라 — 활성 버프 1개당 발밑 링 1개 + 주위를 도는 반짝이
 const AURA_SLOTS = 3;
 const AURA_SPARKLES = 5;
 function buffAuraColor(t: BuffType) {
-  return t === "rangeUp" ? "#f5e26b" : t === "swim" ? "#83d2ff" : "#ff9bd1";
+  return t === "rangeUp"
+    ? "#f5e26b"
+    : t === "swim"
+      ? "#1f74e6"
+      : t === "comboFreeze"
+        ? "#bfeeff"
+        : "#ff9bd1";
 }
 
 interface Props {
@@ -89,7 +96,7 @@ export default function Frog({
       const showAura = !isDead && !crocSnap && buffs.length > 0;
       auraRef.current.visible = showAura;
       if (showAura) {
-        const tnow = performance.now() / 1000;
+        const tnow = gameNow();
         // 연잎 윗면(월드 ~0.18)보다 살짝 위에 링이 깔리도록 — 발밑이 연잎에 가려지지 않게
         auraRef.current.position.set(position.x, position.y + 0.2, position.z);
         for (let i = 0; i < AURA_SLOTS; i++) {
@@ -133,10 +140,10 @@ export default function Frog({
     // 사망 시 물속으로 빠지는 애니메이션
     if (isDead) {
       if (!wasDeadRef.current) {
-        deathAtRef.current = performance.now();
+        deathAtRef.current = gameNowMs();
         wasDeadRef.current = true;
       }
-      const deadAge = (performance.now() - (deathAtRef.current ?? performance.now())) / 1000;
+      const deadAge = (gameNowMs() - (deathAtRef.current ?? gameNowMs())) / 1000;
       // 0~0.08s: 수면에 찰싹 납작해지고 바로 숨김
       const squashT = Math.min(1, deadAge / 0.08);
       const scaleX = 1 + squashT * 0.7;
@@ -155,10 +162,10 @@ export default function Frog({
     // 악어에 잡아먹히는 애니메이션 — 악어 쪽으로 빨려들어가며 소멸
     if (crocSnap) {
       if (!wasCrocRef.current) {
-        crocAtRef.current = performance.now();
+        crocAtRef.current = gameNowMs();
         wasCrocRef.current = true;
       }
-      const t = Math.min(1, (performance.now() - (crocAtRef.current ?? performance.now())) / 280);
+      const t = Math.min(1, (gameNowMs() - (crocAtRef.current ?? gameNowMs())) / 280);
       const ease = t * t; // ease-in: 점점 빠르게
       const dx = crocSnap.cx - position.x;
       const dz = crocSnap.cz - position.z;
@@ -183,7 +190,7 @@ export default function Frog({
     // 발판 출렁 따라 까딱 — 연잎에 서 있을 때만(점프·헤엄 중 제외)
     const padBob =
       !isJumping && !isSwimming && position.padLaunchAt != null
-        ? launchBounceY(performance.now() / 1000 - position.padLaunchAt)
+        ? launchBounceY(gameNow() - position.padLaunchAt)
         : 0;
     ref.current.position.set(position.x, position.y + Y_LIFT + padBob, position.z);
 
@@ -215,7 +222,7 @@ export default function Frog({
 
     if (isSwimming) {
       // 헤엄 — 물 위에 납작하게 퍼져 좌우로 파닥이며 나아간다
-      const t = performance.now() * 0.018;
+      const t = gameNowMs() * 0.018;
       ref.current.scale.set(1.22 + Math.sin(t) * 0.06, 0.6, 1.12);
       ref.current.rotation.z = Math.sin(t) * 0.12;
     } else if (isCharging) {
@@ -224,12 +231,12 @@ export default function Frog({
       const s = 1 + Math.sin(jumpProgress * Math.PI) * 0.22;
       ref.current.scale.set(0.92, s, 0.92);
     } else {
-      const t = performance.now() * 0.003;
+      const t = gameNowMs() * 0.003;
       ref.current.scale.set(1 + Math.sin(t) * 0.025, 1 + Math.cos(t) * 0.025, 1);
     }
 
     // 눈 깜빡임 — 5~7초 주기로 짧게
-    const now = performance.now();
+    const now = gameNowMs();
     const blinkCycle = (now % 6000) / 6000;
     const blinking = blinkCycle > 0.97;
     const ey = blinking ? 0.04 : 0.24;

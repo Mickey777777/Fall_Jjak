@@ -43,6 +43,7 @@ export default function HUD() {
   const crocDanger = useGameStore((s) => s.crocDanger);
   const comboIdleWarn = useGameStore((s) => s.comboIdleWarn);
   const lightningFlash = useGameStore((s) => s.lightningFlash);
+  const comboFreezeAt = useGameStore((s) => s.comboFreezeAt);
   const setPhase = useGameStore((s) => s.setPhase);
 
   const [, setTick] = useState(0);
@@ -50,6 +51,16 @@ export default function HUD() {
     const id = window.setInterval(() => setTick((x) => x + 1), 80);
     return () => window.clearInterval(id);
   }, []);
+
+  // 콤보 프리징 발동 → 콤보 칩에 잠깐 얼음 효과 (발동 타임스탬프를 key로 애니메이션 재시작)
+  const [frozenAt, setFrozenAt] = useState(0);
+  useEffect(() => {
+    if (comboFreezeAt === 0) return;
+    setFrozenAt(comboFreezeAt);
+    const id = window.setTimeout(() => setFrozenAt(0), 1100);
+    return () => window.clearTimeout(id);
+  }, [comboFreezeAt]);
+  const isFrozen = frozenAt !== 0;
 
   const mult = comboMultiplier(combo);
   const chargeRatio = Math.max(
@@ -101,7 +112,7 @@ export default function HUD() {
       {/* 중앙 상단 — 콤보 칩 (콤보 1 이상일 때만 표시). idle 끊김 임박 시 붉게 깜빡임 */}
       {combo > 0 && (
         <div
-          className={`combo-chip${comboIdleWarn > 0 ? " warn" : ""}`}
+          className={`combo-chip${comboIdleWarn > 0 ? " warn" : ""}${isFrozen ? " frozen" : ""}`}
           key={combo}
           style={
             comboIdleWarn > 0
@@ -114,6 +125,13 @@ export default function HUD() {
               : undefined
           }
         >
+          {isFrozen && (
+            <span className="combo-frost" key={frozenAt} aria-hidden>
+              <Snowflake className="frost-flake f1" />
+              <Snowflake className="frost-flake f2" />
+              <Snowflake className="frost-flake f3" />
+            </span>
+          )}
           <span className="combo-num">×{combo}</span>
           <span className="combo-mult">{mult.toFixed(1)}배</span>
         </div>
@@ -285,7 +303,7 @@ function getBuffMeta(t: BuffType) {
 }
 function buffColor(t: BuffType) {
   return (
-    { rangeUp: "#f5e26b", swim: "#83d2ff", scoreBoost: "#ff9bd1", comboFreeze: "#bfeeff" }[t] ??
+    { rangeUp: "#f5e26b", swim: "#1f74e6", scoreBoost: "#ff9bd1", comboFreeze: "#bfeeff" }[t] ??
     "#ccc"
   );
 }

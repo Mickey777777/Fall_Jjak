@@ -4,6 +4,7 @@ import { CanvasTexture, LinearFilter } from "three";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { useGameStore } from "../store/useGameStore";
 import { JUMP } from "./constants";
+import { gameNowMs } from "./gameClock";
 import type { JudgmentPopup } from "./types";
 
 interface Props {
@@ -74,7 +75,7 @@ export default function EffectsManager({
     const rangeBonus = rangeBuff ? 1.3 : 1;
     const rangeBlink =
       rangeBuff && rangeBuff.remaining < 2
-        ? Math.sin(performance.now() * 0.02) > 0
+        ? Math.sin(gameNowMs() * 0.02) > 0
         : false;
     // rangeUp은 최댓값만 확장 — 최솟값은 그대로
     const d = Math.max(
@@ -133,7 +134,7 @@ export default function EffectsManager({
 
       {/* 판정 popup */}
       {popups.map((p) => {
-        const age = (performance.now() - p.bornAt) / 900;
+        const age = (gameNowMs() - p.bornAt) / 900;
         const y = 0.35;
         const opacity = Math.max(0, 1 - age);
         const popScale = popupPopScale(p.type, age);
@@ -251,7 +252,7 @@ function popupPopScale(type: string, age: number) {
 }
 
 function YarrBurst({ burst }: { burst: { x: number; z: number; bornAt: number } }) {
-  const age = (performance.now() - burst.bornAt) / 1000;
+  const age = (gameNowMs() - burst.bornAt) / 1000;
   if (age > 1) return null;
 
   const p = Math.min(1, age);
@@ -345,7 +346,7 @@ function SplashEffect({ splash }: { splash: { x: number; z: number; bornAt: numb
   const NUM_DROPS = DROP_PARAMS.length;
 
   useFrame(() => {
-    const age = (performance.now() - splash.bornAt) / SPLASH_DUR;
+    const age = (gameNowMs() - splash.bornAt) / SPLASH_DUR;
     const grp = groupRef.current;
     if (grp) grp.visible = age <= 1.05;
     if (age > 1.05) return;
@@ -461,7 +462,7 @@ function CrocSnapEffect({ snap }: { snap: { x: number; z: number; bornAt: number
   const spikeMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   useFrame(() => {
-    const age = (performance.now() - snap.bornAt) / CROC_DUR;
+    const age = (gameNowMs() - snap.bornAt) / CROC_DUR;
     const grp = groupRef.current;
     if (grp) grp.visible = age <= 1.05;
     if (age > 1.05) return;
@@ -578,7 +579,7 @@ function LaunchEffect({ launch }: { launch: { x: number; z: number; bornAt: numb
   const dropMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   useFrame(() => {
-    const age = (performance.now() - launch.bornAt) / LAUNCH_DUR;
+    const age = (gameNowMs() - launch.bornAt) / LAUNCH_DUR;
     const grp = groupRef.current;
     if (grp) grp.visible = age <= 1.05;
     if (age > 1.05) return;
@@ -639,7 +640,7 @@ function SwimWake({ active, x, z }: { active: boolean; x: number; z: number }) {
   const cursor = useRef(0);
 
   useFrame(() => {
-    const now = performance.now();
+    const now = gameNowMs();
     // 헤엄 중에는 일정 간격으로 현재 위치에 새 물살 링을 떨어뜨린다
     if (active && now - lastDrop.current >= SWIM_WAKE_INTERVAL) {
       lastDrop.current = now;
@@ -709,7 +710,7 @@ function ComboBreak({ brk }: { brk: { x: number; z: number; bornAt: number } }) 
   const shardMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   useFrame(() => {
-    const age = (performance.now() - brk.bornAt) / BREAK_DUR;
+    const age = (gameNowMs() - brk.bornAt) / BREAK_DUR;
     const grp = groupRef.current;
     if (grp) grp.visible = age <= 1.05;
     if (age > 1.05) return;

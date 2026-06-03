@@ -3,6 +3,7 @@ import { Suspense, useEffect } from "react";
 import LilyPadManager from "../game/LilyPadManager";
 import { useGameStore } from "../store/useGameStore";
 import { COLORS, WORLD } from "../game/constants";
+import { pauseClock, resumeClock } from "../game/gameClock";
 
 interface Props {
   paused: boolean;
@@ -15,6 +16,14 @@ export default function GameCanvas({ paused }: Props) {
   const phase = useGameStore((s) => s.phase);
   const setPhase = useGameStore((s) => s.setPhase);
   const runId = useGameStore((s) => s.runId);
+
+  // 게임 내부 시계 정지/재개 — "paused" 상태에서만 멈춘다.
+  // 게임오버는 멈추지 않는다(개구리 익사·물보라 등 사망 연출이 게임 시계로 재생되므로,
+  // 여기서 얼리면 죽는 모션이 그대로 정지해 "익사를 안 하는" 것처럼 보인다).
+  useEffect(() => {
+    if (phase === "paused") pauseClock();
+    else resumeClock();
+  }, [phase]);
 
   // ESC = 일시정지 토글 (플레이 중일 때만)
   useEffect(() => {

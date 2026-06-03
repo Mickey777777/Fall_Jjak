@@ -21,6 +21,7 @@ import {
 import { COLORS } from "./constants";
 import { useGameStore } from "../store/useGameStore";
 import { playThunder } from "./sound";
+import { gameNow, gameNowMs } from "./gameClock";
 import { initSlots, slotHash, updateSlots } from "./slotRecycler";
 
 // 부드러운 라디얼 그라데이션 텍스처 (먹구름 그림자용) — 가장자리가 자연스럽게 사라짐
@@ -69,7 +70,7 @@ function RainRipples({ frogX, frogZ, active, paused }: { frogX: number; frogZ: n
 
   useFrame(() => {
     if (paused) return; // 일시정지 시 파문 정지
-    const now = performance.now();
+    const now = gameNowMs();
     if (active && now - lastSpawn.current >= RAIN_RIPPLE_INTERVAL) {
       lastSpawn.current = now;
       const k = Math.random() < 0.5 ? 2 : 1; // 한 번에 1~2개
@@ -291,7 +292,7 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
   const tmp = useMemo(() => new Matrix4(), []);
 
   useFrame(() => {
-    const t = performance.now() / 1000;
+    const t = gameNow();
     // 강풍 반응용 — 바람 방향/세기 (강풍이 아니면 0)
     const windOn = weather === "wind";
     const wDirX = windOn ? Math.cos(wind.direction) : 0;
@@ -556,7 +557,7 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
       return;
     }
     if (paused) return; // 강풍 중 일시정지 → 현재 위치로 정지(count 유지)
-    const t = performance.now() / 1000;
+    const t = gameNow();
     const dirX = Math.cos(wind.direction);
     const dirZ = Math.sin(wind.direction);
     const spd = 7 * (0.5 + wind.strength);
@@ -600,7 +601,7 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
   useFrame((_, dt) => {
     if (paused) return; // 일시정지 시 안개 자락 정지
     const intensity = fogIntensityRef.current;
-    const t = performance.now() / 1000;
+    const t = gameNow();
     for (let i = 0; i < MIST_N; i++) {
       const m = mistRefs.current[i];
       const mat = mistMatRefs.current[i];
@@ -644,7 +645,7 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
     hazeMatRef.current.opacity = intensity * 0.4;
     hazeRef.current.visible = intensity > 0.02;
     if (intensity < 0.02) return;
-    const t = performance.now() / 1000;
+    const t = gameNow();
     const pos = hazeRef.current.geometry.attributes.position as BufferAttribute;
     const arr = pos.array as Float32Array;
     for (let i = 0; i < arr.length; i += 3) {
@@ -738,7 +739,7 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
         // 가까우면 천둥 즉시·크게(+카메라 흔들림), 멀면 늦게·먹먹
         thunderInRef.current = close ? 0.15 + Math.random() * 0.25 : 0.9 + Math.random() * 1.2;
         thunderPowerRef.current = close ? 1 : 0.35 + Math.random() * 0.2;
-        if (close) setLightningShakeAt(performance.now());
+        if (close) setLightningShakeAt(gameNowMs());
       }
     }
     // 섬광 엔벨로프 — 초반 강한 번쩍 + 0.12초경 2차 점멸, 빠르게 감쇠

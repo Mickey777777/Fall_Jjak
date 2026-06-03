@@ -11,6 +11,8 @@ interface Props {
   dist: number;
   /** 악어가 개구리를 잡아먹은 상태 — true면 물살 정리 */
   caught?: boolean;
+  /** 일시정지 — 델타 기반 모션(물결 링·턱·부상 보간) 정지 */
+  paused?: boolean;
 }
 
 const WATER_Y     = -0.50;
@@ -35,7 +37,7 @@ const RING_N     = 8;       // 트레일 물결 링 풀 크기
 const RING_LIFE  = 1.5;     // 링 수명 (s)
 const RING_SPAWN = 0.22;    // 링 생성 간격 (s)
 
-export default function CrocEnemy({ x, z, now, dist, caught = false }: Props) {
+export default function CrocEnemy({ x, z, now, dist, caught = false, paused = false }: Props) {
   const subRef        = useRef<Group>(null);
   const headRef       = useRef<Group>(null);
   const snoutRef      = useRef<Group>(null);
@@ -61,6 +63,7 @@ export default function CrocEnemy({ x, z, now, dist, caught = false }: Props) {
 
 
   useFrame((_, delta) => {
+    if (paused) return; // 일시정지 시 악어 모션 정지 (현 상태 고정)
     const bob = Math.sin(now * 2.2) * 0.015;
 
     // ── 잡아먹은 후 이펙트 정리 + 본체 고정 ──
