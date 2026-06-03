@@ -4,6 +4,7 @@ import { CanvasTexture, LinearFilter } from "three";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { useGameStore } from "../store/useGameStore";
 import { JUMP } from "./constants";
+import { gameNowMs } from "./gameClock";
 import type { JudgmentPopup } from "./types";
 
 interface Props {
@@ -14,8 +15,12 @@ interface Props {
   arcHeight: number;
   isCharging: boolean;
   isJumping: boolean;
+  isSwimming: boolean;
   yarrBurst: { x: number; z: number; bornAt: number } | null;
   splashAt: { x: number; z: number; bornAt: number } | null;
+  swimSplashAt: { x: number; z: number; bornAt: number } | null;
+  launchAt: { x: number; z: number; bornAt: number } | null;
+  comboBreakAt: { x: number; z: number; bornAt: number } | null;
   crocSnapAt: { x: number; z: number; cx: number; cz: number; bornAt: number } | null;
 }
 
@@ -43,8 +48,12 @@ export default function EffectsManager({
   arcHeight,
   isCharging,
   isJumping,
+  isSwimming,
   yarrBurst,
   splashAt,
+  swimSplashAt,
+  launchAt,
+  comboBreakAt,
   crocSnapAt,
 }: Props) {
   const popups = useGameStore((s) => s.popups);
@@ -66,7 +75,7 @@ export default function EffectsManager({
     const rangeBonus = rangeBuff ? 1.3 : 1;
     const rangeBlink =
       rangeBuff && rangeBuff.remaining < 2
-        ? Math.sin(performance.now() * 0.02) > 0
+        ? Math.sin(gameNowMs() * 0.02) > 0
         : false;
     // rangeUp은 최댓값만 확장 — 최솟값은 그대로
     const d = Math.max(
@@ -125,7 +134,7 @@ export default function EffectsManager({
 
       {/* 판정 popup */}
       {popups.map((p) => {
-        const age = (performance.now() - p.bornAt) / 900;
+        const age = (gameNowMs() - p.bornAt) / 900;
         const y = 0.35;
         const opacity = Math.max(0, 1 - age);
         const popScale = popupPopScale(p.type, age);
@@ -140,8 +149,12 @@ export default function EffectsManager({
         );
       })}
 
+      <SwimWake active={isSwimming} x={frogX} z={frogZ} />
       {yarrBurst ? <YarrBurst burst={yarrBurst} /> : null}
       {splashAt ? <SplashEffect splash={splashAt} /> : null}
+      {swimSplashAt ? <SplashEffect key={swimSplashAt.bornAt} splash={swimSplashAt} /> : null}
+      {launchAt ? <LaunchEffect key={launchAt.bornAt} launch={launchAt} /> : null}
+      {comboBreakAt ? <ComboBreak key={comboBreakAt.bornAt} brk={comboBreakAt} /> : null}
       {crocSnapAt ? <CrocSnapEffect snap={crocSnapAt} /> : null}
     </group>
   );
@@ -239,7 +252,7 @@ function popupPopScale(type: string, age: number) {
 }
 
 function YarrBurst({ burst }: { burst: { x: number; z: number; bornAt: number } }) {
-  const age = (performance.now() - burst.bornAt) / 1000;
+  const age = (gameNowMs() - burst.bornAt) / 1000;
   if (age > 1) return null;
 
   const p = Math.min(1, age);
@@ -333,7 +346,7 @@ function SplashEffect({ splash }: { splash: { x: number; z: number; bornAt: numb
   const NUM_DROPS = DROP_PARAMS.length;
 
   useFrame(() => {
-    const age = (performance.now() - splash.bornAt) / SPLASH_DUR;
+    const age = (gameNowMs() - splash.bornAt) / SPLASH_DUR;
     const grp = groupRef.current;
     if (grp) grp.visible = age <= 1.05;
     if (age > 1.05) return;
@@ -449,7 +462,7 @@ function CrocSnapEffect({ snap }: { snap: { x: number; z: number; bornAt: number
   const spikeMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   useFrame(() => {
-    const age = (performance.now() - snap.bornAt) / CROC_DUR;
+    const age = (gameNowMs() - snap.bornAt) / CROC_DUR;
     const grp = groupRef.current;
     if (grp) grp.visible = age <= 1.05;
     if (age > 1.05) return;
@@ -543,6 +556,222 @@ function CrocSnapEffect({ snap }: { snap: { x: number; z: number; bornAt: number
             color={p.col}
             transparent
             opacity={0.9}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ──────── 점프 발사 이펙트 (도약 순간 물 차고 오름) ────────
+const LAUNCH_DUR = 520;
+const LAUNCH_DROPS = 8;
+const LAUNCH_DROP_PARAMS = Array.from({ length: LAUNCH_DROPS }, (_, i) => ({
+  angle: (i / LAUNCH_DROPS) * Math.PI * 2 + 0.25,
+  horiz: 1.0 + (i % 3) * 0.35,
+  v0: 2.4 + (i % 3) * 0.55,
+  r: 0.05 + (i % 2) * 0.02,
+}));
+
+function LaunchEffect({ launch }: { launch: { x: number; z: number; bornAt: number } }) {
+  const groupRef = useRef<Group>(null);
+  const dropRefs = useRef<(Mesh | null)[]>([]);
+  const dropMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+
+  useFrame(() => {
+    const age = (gameNowMs() - launch.bornAt) / LAUNCH_DUR;
+    const grp = groupRef.current;
+    if (grp) grp.visible = age <= 1.05;
+    if (age > 1.05) return;
+    const tSec = age * (LAUNCH_DUR / 1000);
+
+    // 발 차고 오르며 튀어오르는 물방울 (중력 낙하) — 동심원 물살은 연잎(LilyPad)이 담당
+    for (let i = 0; i < LAUNCH_DROPS; i++) {
+      const d = dropRefs.current[i];
+      const mat = dropMatRefs.current[i];
+      if (!d || !mat) continue;
+      const { angle, horiz, v0 } = LAUNCH_DROP_PARAMS[i];
+      const y = Math.max(0, v0 * tSec - 4.9 * tSec * tSec);
+      d.position.set(
+        launch.x + Math.cos(angle) * horiz * tSec,
+        y,
+        launch.z + Math.sin(angle) * horiz * tSec,
+      );
+      d.visible = y > 0.01;
+      mat.opacity = Math.max(0, 1 - age / 0.8);
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {LAUNCH_DROP_PARAMS.map((p, i) => (
+        <mesh
+          key={`ld${i}`}
+          ref={(el) => { dropRefs.current[i] = el; }}
+          position={[launch.x, 0, launch.z]}
+        >
+          <sphereGeometry args={[p.r, 5, 4]} />
+          <meshBasicMaterial
+            ref={(m) => { dropMatRefs.current[i] = m; }}
+            color="#bfeeff"
+            transparent
+            opacity={0.85}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ──────── 수영 항적 (헤엄칠 때 뒤로 남는 물살) ────────
+const SWIM_WAKE_N = 16;         // 링 풀 크기 (간격이 좁아진 만큼 늘려 수명 보장)
+const SWIM_WAKE_LIFE = 750;     // 각 링 수명(ms)
+const SWIM_WAKE_INTERVAL = 50;  // 링 방출 간격(ms) — 더 촘촘하게
+const SWIM_WAKE_Y = 0.06;       // 수면 높이
+
+function SwimWake({ active, x, z }: { active: boolean; x: number; z: number }) {
+  const ringRefs = useRef<(Mesh | null)[]>([]);
+  const ringMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+  // 각 링이 "떨어진" 자리와 시각 (제자리에서 퍼지며 사라짐 → 항적처럼 뒤에 남음)
+  const drops = useRef(
+    Array.from({ length: SWIM_WAKE_N }, () => ({ x: 0, z: 0, bornAt: -1e9 })),
+  );
+  const lastDrop = useRef(0);
+  const cursor = useRef(0);
+
+  useFrame(() => {
+    const now = gameNowMs();
+    // 헤엄 중에는 일정 간격으로 현재 위치에 새 물살 링을 떨어뜨린다
+    if (active && now - lastDrop.current >= SWIM_WAKE_INTERVAL) {
+      lastDrop.current = now;
+      const slot = drops.current[cursor.current % SWIM_WAKE_N];
+      slot.x = x;
+      slot.z = z;
+      slot.bornAt = now;
+      cursor.current++;
+    }
+    for (let i = 0; i < SWIM_WAKE_N; i++) {
+      const m = ringRefs.current[i];
+      const mat = ringMatRefs.current[i];
+      const d = drops.current[i];
+      if (!m || !mat) continue;
+      const age = (now - d.bornAt) / SWIM_WAKE_LIFE;
+      if (age < 0 || age > 1) {
+        m.visible = false;
+        continue;
+      }
+      m.visible = true;
+      m.position.set(d.x, SWIM_WAKE_Y, d.z);
+      const s = 0.25 + age * 0.85; // 제자리에서 퍼짐
+      m.scale.set(s, s, s);
+      mat.opacity = (1 - age) * (1 - age) * 0.42;
+    }
+  });
+
+  return (
+    <group>
+      {Array.from({ length: SWIM_WAKE_N }).map((_, i) => (
+        <mesh
+          key={`wake${i}`}
+          ref={(el) => { ringRefs.current[i] = el; }}
+          rotation={[-Math.PI / 2, 0, 0]}
+          visible={false}
+        >
+          <ringGeometry args={[0.62, 0.8, 20]} />
+          <meshBasicMaterial
+            ref={(m) => { ringMatRefs.current[i] = m; }}
+            color="#dff4ff"
+            transparent
+            opacity={0}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ──────── 콤보 끊김 이펙트 (쌓인 콤보가 리셋될 때 회색 조각이 흩어져 떨어짐) ────────
+const BREAK_DUR = 850;
+const BREAK_SHARDS = 14;
+const BREAK_SHARD_PARAMS = Array.from({ length: BREAK_SHARDS }, (_, i) => ({
+  angle: (i / BREAK_SHARDS) * Math.PI * 2 + 0.3,
+  horiz: 1.1 + (i % 4) * 0.4, // 바깥으로 흩어지는 속도
+  v0: 1.9 + (i % 3) * 0.6, // 처음 더 높이 튀어오름
+  scale: 0.08 + (i % 3) * 0.03, // 조각 크기
+  spin: (i % 2 === 0 ? 1 : -1) * (3 + (i % 3)),
+}));
+
+function ComboBreak({ brk }: { brk: { x: number; z: number; bornAt: number } }) {
+  const groupRef = useRef<Group>(null);
+  const flashRef = useRef<Mesh>(null);
+  const flashMatRef = useRef<MeshBasicMaterial>(null);
+  const shardRefs = useRef<(Mesh | null)[]>([]);
+  const shardMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+
+  useFrame(() => {
+    const age = (gameNowMs() - brk.bornAt) / BREAK_DUR;
+    const grp = groupRef.current;
+    if (grp) grp.visible = age <= 1.05;
+    if (age > 1.05) return;
+    const tSec = age * (BREAK_DUR / 1000);
+
+    // 시작 순간 회색 플래시 — 콤보가 깨지는 타이밍을 확실히 알림
+    if (flashRef.current && flashMatRef.current) {
+      const ft = age / 0.22;
+      flashRef.current.scale.setScalar(1 + ft * 4.5);
+      flashMatRef.current.opacity = Math.max(0, (1 - ft) * 0.8);
+    }
+
+    // 회색 조각 — 살짝 튀었다 중력으로 떨어지며 흩어짐 (콤보가 깨져 떨어지는 느낌)
+    for (let i = 0; i < BREAK_SHARDS; i++) {
+      const s = shardRefs.current[i];
+      const mat = shardMatRefs.current[i];
+      if (!s || !mat) continue;
+      const { angle, horiz, v0, scale, spin } = BREAK_SHARD_PARAMS[i];
+      const y = 0.5 + v0 * tSec - 5.0 * tSec * tSec; // 위로 튀었다 낙하
+      s.position.set(
+        brk.x + Math.cos(angle) * horiz * tSec,
+        Math.max(0.02, y),
+        brk.z + Math.sin(angle) * horiz * tSec,
+      );
+      s.rotation.set(age * spin, age * spin * 0.7, age * spin);
+      s.scale.setScalar(scale);
+      mat.opacity = Math.max(0, 1 - age / 0.92);
+    }
+  });
+
+  return (
+    <group ref={groupRef}>
+      {/* 시작 플래시 */}
+      <mesh
+        ref={flashRef}
+        position={[brk.x, 0.4, brk.z]}
+        rotation={[-Math.PI / 2, 0, 0]}
+      >
+        <circleGeometry args={[0.5, 20]} />
+        <meshBasicMaterial
+          ref={flashMatRef}
+          color="#8b979d"
+          transparent
+          opacity={0.8}
+          depthWrite={false}
+        />
+      </mesh>
+      {/* 부서져 떨어지는 조각 (어두운 회색) */}
+      {BREAK_SHARD_PARAMS.map((_, i) => (
+        <mesh
+          key={`brk${i}`}
+          ref={(el) => { shardRefs.current[i] = el; }}
+          position={[brk.x, 0.5, brk.z]}
+        >
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial
+            ref={(m) => { shardMatRefs.current[i] = m; }}
+            color={i % 2 === 0 ? "#828f96" : "#525d63"}
+            transparent
+            opacity={0.95}
+            depthWrite={false}
           />
         </mesh>
       ))}

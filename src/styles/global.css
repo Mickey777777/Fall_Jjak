@@ -81,6 +81,64 @@ body {
   color: #fff;
 }
 
+/* 날씨별 화면 색감(컬러 그레이드) — App 레벨(캔버스 위, HUD 아래). 안개처럼 천천히 전환 */
+.weather-grade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: transparent;
+  transition: background 5s ease;
+}
+.weather-grade.weather-rain {
+  background: rgba(34, 56, 92, 0.26);
+}
+.weather-grade.weather-cloud {
+  background: rgba(48, 52, 70, 0.18);
+}
+.weather-grade.weather-fog {
+  background: rgba(206, 216, 220, 0.18);
+}
+
+/* 번개 흰 플래시 — 짧게 화면 전체가 번쩍 (opacity는 inline으로 구동) */
+.lightning-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  background: radial-gradient(ellipse at 50% 28%, rgba(235, 242, 255, 0.95), rgba(200, 220, 255, 0.5) 55%, rgba(180, 205, 255, 0.2));
+}
+
+/* ──────── 콤보 랭크업 — 화면 전체 금빛 반짝 ──────── */
+.rankup-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 7;
+  overflow: hidden;
+}
+
+/* 테두리에서 안쪽으로 번졌다 사라지는 금빛 글로우 */
+.rankup-burst {
+  position: absolute;
+  inset: 0;
+  /* 중앙은 투명, 가장자리로 갈수록 금빛 — 테두리가 빛나는 느낌 */
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 52%,
+    var(--rank-mid, rgba(255, 245, 176, 0.1)) 74%,
+    var(--rank-edge, rgba(255, 219, 110, 0.32)) 100%
+  );
+  box-shadow: inset 0 0 var(--rank-shadow, 110px rgba(255, 219, 110, 0.38));
+  animation: rankupBurst 0.9s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes rankupBurst {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+
 /* 좌상단 큰 점수 */
 .score-big {
   position: absolute;
@@ -141,6 +199,97 @@ body {
   100% {
     transform: translateX(-50%) scale(1);
   }
+}
+
+/* 콤보 끊김 임박 경고 — 칩이 붉게 깜빡이고 "곧 끊김!" 표시 (깜빡임 속도는 inline으로 가속) */
+.combo-chip.warn {
+  animation: comboWarnBlink 0.5s ease-in-out infinite;
+}
+.combo-chip.warn .combo-num {
+  color: #ff9a6d;
+}
+@keyframes comboWarnBlink {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+    filter: drop-shadow(0 0 calc(2px + var(--warn, 0) * 3px) rgba(255, 90, 50, calc(0.12 + var(--warn, 0) * 0.18)));
+  }
+  50% {
+    transform: translateX(-50%) scale(calc(1.02 + var(--warn, 0) * 0.05));
+    filter: drop-shadow(0 0 calc(4px + var(--warn, 0) * 12px) rgba(255, 90, 50, calc(0.3 + var(--warn, 0) * 0.5)));
+  }
+}
+
+/* ──────── 콤보 프리징 발동 — 콤보 칩 얼음 효과 ──────────
+ * 칩 자체의 animation(comboPop)을 건드리지 않도록 안쪽 숫자에만 적용 →
+ * 클래스가 빠질 때 comboPop이 재생되는 부작용 방지 */
+.combo-chip.frozen .combo-num {
+  display: inline-block;
+  animation: comboFreezeNum 1.05s cubic-bezier(0.16, 1.2, 0.4, 1) both;
+}
+@keyframes comboFreezeNum {
+  0% {
+    transform: scale(1);
+    color: #ffd84d;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  }
+  18% {
+    transform: scale(1.18);
+    color: #e8fbff;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 0 16px rgba(150, 225, 255, 0.95);
+  }
+  70% {
+    color: #b6ecff;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35), 0 0 8px rgba(150, 225, 255, 0.5);
+  }
+  100% {
+    transform: scale(1);
+    color: #ffd84d;
+    text-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  }
+}
+
+/* 칩 위에 흩날리는 눈송이 3개 */
+.combo-frost {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.frost-flake {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  color: #d6f6ff;
+  filter: drop-shadow(0 0 4px rgba(150, 225, 255, 0.85));
+  opacity: 0;
+}
+.frost-flake.f1 {
+  left: -10px;
+  top: 4px;
+  animation: frostDrift 1s ease-out both;
+}
+.frost-flake.f2 {
+  right: -8px;
+  top: 0;
+  width: 12px;
+  height: 12px;
+  animation: frostDrift 1s ease-out 0.08s both;
+}
+.frost-flake.f3 {
+  left: 50%;
+  top: -12px;
+  width: 13px;
+  height: 13px;
+  animation: frostDriftUp 1s ease-out 0.04s both;
+}
+@keyframes frostDrift {
+  0% { opacity: 0; transform: translateY(-4px) scale(0.5) rotate(0deg); }
+  25% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(16px) scale(1) rotate(140deg); }
+}
+@keyframes frostDriftUp {
+  0% { opacity: 0; transform: translateY(0) scale(0.4) rotate(0deg); }
+  30% { opacity: 1; transform: translateY(-6px) scale(1) rotate(60deg); }
+  100% { opacity: 0; transform: translateY(-22px) scale(0.9) rotate(180deg); }
 }
 
 /* 좌측 하단 날씨 칩 */
@@ -320,6 +469,7 @@ body {
   justify-content: center;
   background: linear-gradient(180deg, rgba(168, 216, 216, 0.4), rgba(20, 28, 30, 0.6));
   backdrop-filter: blur(4px);
+  animation: overlayFade 0.32s ease both;
 }
 
 .card {
@@ -333,6 +483,16 @@ body {
   min-width: 340px;
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.25);
   align-items: stretch;
+  animation: cardRise 0.42s cubic-bezier(0.16, 1.2, 0.4, 1) both;
+}
+
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cardRise {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: none; }
 }
 .card.wide {
   min-width: 560px;
@@ -417,6 +577,15 @@ button.ghost {
   background: rgba(0, 0, 0, 0.05);
   color: var(--ink);
   border: 2px solid rgba(0, 0, 0, 0.12);
+}
+
+/* 메뉴 로고 등장 */
+.logo {
+  animation: cardRise 0.5s cubic-bezier(0.16, 1.2, 0.4, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .card, .logo { animation: none; }
 }
 
 .logo {
@@ -508,16 +677,17 @@ button.ghost {
 }
 .help-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
   margin-bottom: 14px;
 }
 .help-tabs button {
-  padding: 11px 12px;
+  padding: 11px 6px;
   border-radius: 10px;
   background: rgba(0, 0, 0, 0.06);
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
   box-shadow: none;
 }
 .help-tabs button.active {
@@ -552,8 +722,12 @@ button.ghost {
 }
 .help-item-desc {
   font-size: 11px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: var(--ink-soft);
+  /* 한글은 글자 단위로 끊지 말고 띄어쓰기(어절) 단위로 줄바꿈 → 자연스러운 줄나눔 */
+  word-break: keep-all;
+  /* 설명 문자열의 명시적 줄바꿈(\n)을 그대로 렌더 (절 단위로 한 줄씩) */
+  white-space: pre-line;
 }
 .credits {
   position: absolute;

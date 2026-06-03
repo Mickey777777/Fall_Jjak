@@ -85,6 +85,14 @@ export const SCORE = {
     { combo: 40, mult: 2.6 },
   ],
   FLY_BONUS: 50,
+  // 콤보 idle 초기화: 마지막 착지 후 이 시간(초) 안에 다음 착지가 없으면 콤보 리셋.
+  // 기본 10초에서 콤보 배율이 한 단계 오를 때마다 0.5초씩 줄어 압박이 커진다 (최소 2초).
+  COMBO_IDLE_RESET_BASE: 10,
+  COMBO_IDLE_RESET_PER_TIER: 0.5,
+  COMBO_IDLE_RESET_MIN: 2,
+  // 콤보 끊김 경고: 리셋까지 남은 시간이 제한 시간의 이 비율 이하로 떨어지면 경고 시작(0→1 램프).
+  // 0.5 = 절반 남았을 때부터 천천히 깜빡이기 시작해 끝으로 갈수록 강해짐.
+  COMBO_IDLE_WARN_FRACTION: 0.5,
 };
 
 // ──────────────────────────────────────────────
@@ -110,8 +118,25 @@ export const DIFFICULTY = {
 // 적 / 환경
 // ──────────────────────────────────────────────
 export const ENEMY = {
-  FISH_LUNGE_HEIGHT: 1.6, // 이보다 낮게 날면 잡힘
-  BIRD_DIVE_HEIGHT: 2.6, // 이보다 높게 날면 잡힘
+  // 이보다 낮게 날면 잡힘. 기본 점프 정점(arcHeight 기본 2.2)보다 높게 둬서
+  // "기본 점프로는 물고기에 걸리고, A로 궤적을 높여야 통과" → 점프를 강제한다.
+  FISH_LUNGE_HEIGHT: 2.4,
+  // 이보다 높게 날면 잡힘. 기본 점프 정점(arcHeight 기본 2.2)보다 낮게 둬야
+  // "기본 점프로는 새에 걸리고, S로 궤적을 낮춰야 통과" 가 성립한다.
+  BIRD_DIVE_HEIGHT: 1.9,
+  BIRD_SPAWN_Y: 2.5, // 새 스폰 높이 — 판정선과 맞춰 "보이는 새 아래로 통과"가 자연스럽게
+  // 물고기 도약 — 렌더와 충돌이 공유하는 y 공식 (fishLiveY). 잠겨 있을 땐 피격 없음
+  FISH_LEAP_FREQ: 1.6, // 솟구침 주기
+  FISH_REST_Y: -1.3, // 잠긴 상태 기준 y (몸 최고점도 수면 아래)
+  FISH_LEAP_RISE: 2.2, // 도약 상승량 보정 (실제 상승 = leap × (amp + 이 값)) — 판정선(2.4)까지 솟구치도록 상향
+  FISH_DEFAULT_AMP: 1, // amplitude 기본값
+  FISH_BREACH_Y: -0.5, // 물고기 몸 중심이 이 높이(수면) 위로 솟았을 때만 피격 판정
+  // 물고기 히트박스 — 머리-꼬리(x)로 길고 옆(z)으로 좁은 몸에 맞춘 타원 (원형은 옆으로 과대)
+  FISH_HALF_LEN: 0.85, // x (머리-꼬리 방향) 반길이
+  FISH_HALF_WID: 0.55, // z (옆) 반너비 — 몸(±0.2) + 도약 시 솟구침·개구리 몸 여유
+  // 새 히트박스 — 날개 폭(z)이 몸 길이(x)보다 넓은 몸에 맞춘 타원 (가로로 넓음)
+  BIRD_HALF_LEN: 1.0, // x (몸통-꼬리) 반길이
+  BIRD_HALF_WID: 1.25, // z (날개 폭) 반너비
   // 새 좌우 패트롤 — 렌더와 충돌이 공유 (진동수 / amplitude 기본값)
   BIRD_PATROL_FREQ: 1.1,
   BIRD_DEFAULT_AMP: 1.5,
@@ -119,6 +144,13 @@ export const ENEMY = {
   CROC_SPEED: 1.00, // m/s 기본 속도 (점수 0 기준). 초반은 넉넉, 머뭇대면 가끔 등장
   CROC_SPEED_MAX: 2.60, // m/s 최대 속도 (CROC_SPEED_MAX_SCORE 도달 시)
   CROC_SPEED_MAX_SCORE: 3000, // 이 점수에서 악어 속도가 CROC_SPEED_MAX에 도달
+  // 환경 장애물(나뭇가지 더미) — 시각이 비스듬히 누운 길쭉한 막대라 원형이 아닌
+  // 방향성 박스(OBB)로 판정해 "보이는 막대"와 히트박스를 일치시킨다.
+  // YAW는 EnemyManager 렌더의 메인 박스 rotation[1](0.4)과 맞춤.
+  OBSTACLE_YAW: 0.4,
+  OBSTACLE_HALF_LEN: 0.95, // 막대 길이 방향 반(half) 길이 (시각 ~0.9 + 약간의 여유)
+  OBSTACLE_HALF_WID: 0.45, // 막대 폭 방향 반(half) 너비 (시각 ~0.3 + 개구리 몸 여유)
+  OBSTACLE_BLOCK_HEIGHT: 2.2, // 이 높이 미만이면 가로막힘
 };
 
 // ──────────────────────────────────────────────

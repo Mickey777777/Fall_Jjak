@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { STORAGE } from "../game/constants";
+import { gameNowMs } from "../game/gameClock";
 import type {
   ActiveBuff,
   GamePhase,
@@ -65,7 +66,8 @@ interface GameState {
   setPhase: (p: GamePhase) => void;
   resetRun: () => void;
   finishRun: () => void;
-  addScore: (raw: number, judgment: JudgmentType) => number;
+  addScore: (raw: number, judgment: JudgmentType, keepCombo?: boolean) => number;
+  resetCombo: () => void;
   addPopup: (popup: JudgmentPopup) => void;
   expirePopups: (now: number) => void;
   setAim: (rad: number) => void;
@@ -77,6 +79,8 @@ interface GameState {
   addBuff: (b: ActiveBuff) => void;
   tickBuffs: (dt: number) => void;
   consumeSwimBuff: () => boolean;
+  /** 콤보 프리징 1회 소모 — 보유 시 true 반환하고 버프 제거 */
+  consumeComboFreeze: () => boolean;
   setDistance: (d: number) => void;
   incrementFlies: () => void;
   incrementPads: () => void;
@@ -85,6 +89,23 @@ interface GameState {
   /** 악어 근접 위험도 0~1 (WARN_DIST=0 → KILL_DIST=1). 0이면 경고 숨김 */
   crocDanger: number;
   setCrocDanger: (v: number) => void;
+  /** 콤보 idle 끊김 경고 0~1 (남은 시간이 경고 구간 진입하면 0→1로 상승). 0이면 숨김 */
+  comboIdleWarn: number;
+  setComboIdleWarn: (v: number) => void;
+  /** 번개 섬광 세기 0~1 — HUD 흰 플래시 오버레이용 (WeatherSystem이 양자화해 갱신) */
+  lightningFlash: number;
+  setLightningFlash: (v: number) => void;
+  /** 가까운 번개 발생 타임스탬프 — LilyPadManager가 감지해 카메라 흔들림 */
+  lightningShakeAt: number;
+  setLightningShakeAt: (v: number) => void;
+  /** 콤보 등급(배율) 상승 이벤트 — 화면 전체 랭크업 연출용. at은 트리거 타임스탬프(0이면 없음) */
+  comboRankUpAt: number;
+  comboRankTier: number;
+  comboRankMult: number;
+  triggerComboRankUp: (tier: number, mult: number) => void;
+  /** 콤보 프리징 발동 타임스탬프 — HUD 콤보 칩 얼음 연출용(0이면 없음) */
+  comboFreezeAt: number;
+  triggerComboFreeze: () => void;
 }
 
 const initialRunState = {
@@ -107,6 +128,13 @@ const initialRunState = {
   wind: { direction: 0, strength: 0 } as WindState,
   buffs: [] as ActiveBuff[],
   crocDanger: 0,
+  comboIdleWarn: 0,
+  lightningFlash: 0,
+  lightningShakeAt: 0,
+  comboRankUpAt: 0,
+  comboRankTier: 0,
+  comboRankMult: 1,
+  comboFreezeAt: 0,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -131,13 +159,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set({ phase: "gameover", isCharging: false });
   },
-  addScore: (raw, judgment) => {
+  addScore: (raw, judgment, keepCombo = false) => {
     const { combo, buffs, score, maxCombo } = get();
     // 콤보 배율 계산은 ScoreSystem 쪽에서 처리하지만, 기본 합산은 여기서.
     const boost = buffs.find((b) => b.type === "scoreBoost") ? 1.5 : 1.0;
     const gained = Math.round(raw * boost);
-    const nextCombo =
-      judgment === "Yarr" || judgment === "Great" ? combo + 1 : 0;
+    // keepCombo(콤보 프리징 발동): 판정과 무관하게 현재 콤보를 그대로 유지
+    const nextCombo = keepCombo
+      ? combo
+      : judgment === "Yarr" || judgment === "Great"
+        ? combo + 1
+        : 0;
     set({
       score: score + gained,
       combo: nextCombo,
@@ -146,6 +178,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastJudgmentAt: performance.now(),
     });
     return gained;
+  },
+  resetCombo: () => {
+    if (get().combo > 0) set({ combo: 0 });
   },
   addPopup: (popup) =>
     set((s) => ({
@@ -160,7 +195,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setChargeDistance: (d) => set({ chargeDistance: d }),
   setArcHeight: (h) => set({ arcHeight: h }),
   setCharging: (c) => set({ isCharging: c }),
-  triggerTongue: (target = null) => set({ tongueAt: performance.now(), tongueTarget: target }),
+  triggerTongue: (target = null) => set({ tongueAt: gameNowMs(), tongueTarget: target }),
 
   setWeather: (w, wind) =>
     set({
@@ -186,6 +221,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ buffs: buffs.filter((_, i) => i !== idx) });
     return true;
   },
+  consumeComboFreeze: () => {
+    const { buffs } = get();
+    const idx = buffs.findIndex((b) => b.type === "comboFreeze");
+    if (idx < 0) return false;
+    set({ buffs: buffs.filter((_, i) => i !== idx) });
+    return true;
+  },
 
   setDistance: (d) => set({ distance: d }),
   incrementFlies: () => set((s) => ({ fliesEaten: s.fliesEaten + 1 })),
@@ -201,4 +243,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   setShowTutorial: (b) => set({ showTutorial: b }),
   setCrocDanger: (v) => set({ crocDanger: v }),
+  setComboIdleWarn: (v) => set({ comboIdleWarn: v }),
+  setLightningFlash: (v) => set({ lightningFlash: v }),
+  setLightningShakeAt: (v) => set({ lightningShakeAt: v }),
+  triggerComboRankUp: (tier, mult) =>
+    set({ comboRankUpAt: performance.now(), comboRankTier: tier, comboRankMult: mult }),
+  triggerComboFreeze: () => set({ comboFreezeAt: performance.now() }),
 }));

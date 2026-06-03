@@ -1,28 +1,33 @@
 import {
+  Bird,
   CheckCircle2,
   Cloud,
   CloudFog,
   CloudRain,
+  Construction,
   Droplets,
   EyeOff,
+  Fish,
   Gauge,
   HelpCircle,
   MoveHorizontal,
   RotateCw,
   Skull,
+  Snowflake,
   Sparkles,
   Star,
   Timer,
+  TriangleAlert,
   Trophy,
   Waves,
   Wind,
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGameStore } from "../store/useGameStore";
 
-type HelpTab = "weather" | "buff" | "lilypad" | "judgment";
+type HelpTab = "weather" | "buff" | "lilypad" | "hazard" | "judgment";
 type HelpItem = {
   Icon: LucideIcon;
   name: string;
@@ -68,7 +73,7 @@ const BUFF_HELP: HelpItem[] = [
   {
     Icon: Waves,
     name: "수영",
-    color: "#3498d8",
+    color: "#1f74e6",
     description: "물에 빠졌을 때 한 번 생존해 가까운 연잎으로 복귀합니다.",
   },
   {
@@ -76,6 +81,12 @@ const BUFF_HELP: HelpItem[] = [
     name: "부스트",
     color: "#d65b9f",
     description: "일정 시간 동안 획득 점수가 증가합니다.",
+  },
+  {
+    Icon: Snowflake,
+    name: "콤보유지",
+    color: "#5ec4e8",
+    description: "콤보가 끊길 상황에서 한 번 콤보를 그대로 지켜줍니다.",
   },
 ];
 
@@ -121,6 +132,37 @@ const LILYPAD_HELP: HelpItem[] = [
     name: "점멸 연잎",
     color: "#d6ee8a",
     description: "나타났다 사라지기를 반복합니다.",
+  },
+];
+
+const HAZARD_HELP: HelpItem[] = [
+  {
+    Icon: Fish,
+    name: "물고기",
+    color: "#4fb3c9",
+    description:
+      "물속에 잠겨 있다가 솟구쳐 오릅니다.\n궤적을 높여(A / ▲) 머리 위로 넘기면 피할 수 있습니다.",
+  },
+  {
+    Icon: Bird,
+    name: "새",
+    color: "#8a9bb0",
+    description:
+      "상공을 날아다닙니다.\n궤적을 낮춰(S / ▼) 아래로 지나가면 피할 수 있습니다.",
+  },
+  {
+    Icon: Construction,
+    name: "장애물",
+    color: "#b08a4a",
+    description:
+      "물 위에 고정된 장애물입니다.\n부딪히면 실패하니 조준 방향을 틀어 비껴 가야 합니다.",
+  },
+  {
+    Icon: TriangleAlert,
+    name: "악어",
+    color: "#6f9b3e",
+    description:
+      "뒤에서 끈질기게 쫓아옵니다.\n머뭇거리면 따라잡혀 잡아먹히니, 멈추지 말고 계속 앞으로 나아가세요.\n점수가 높을수록 빨라집니다.",
   },
 ];
 
@@ -181,14 +223,26 @@ export default function MainMenu() {
 
 function HelpDialog({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<HelpTab>("weather");
-  const items =
-    tab === "weather"
-      ? WEATHER_HELP
-      : tab === "buff"
-        ? BUFF_HELP
-        : tab === "lilypad"
-          ? LILYPAD_HELP
-          : JUDGMENT_HELP;
+
+  // ESC 로 닫기 — 포커스 보유 요소(도움말 버튼)의 키보드 포커스 링이 남지 않도록 blur
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        (document.activeElement as HTMLElement | null)?.blur();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const HELP_BY_TAB: Record<HelpTab, HelpItem[]> = {
+    weather: WEATHER_HELP,
+    buff: BUFF_HELP,
+    lilypad: LILYPAD_HELP,
+    hazard: HAZARD_HELP,
+    judgment: JUDGMENT_HELP,
+  };
+  const items = HELP_BY_TAB[tab];
 
   return (
     <div className="help-backdrop" onMouseDown={onClose}>
@@ -218,6 +272,12 @@ function HelpDialog({ onClose }: { onClose: () => void }) {
             onClick={() => setTab("lilypad")}
           >
             연잎
+          </button>
+          <button
+            className={tab === "hazard" ? "active" : ""}
+            onClick={() => setTab("hazard")}
+          >
+            방해요소
           </button>
           <button
             className={tab === "judgment" ? "active" : ""}

@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, MousePointer2, Pause } from "lucide-react";
+import { useEffect } from "react";
 import { useGameStore } from "../store/useGameStore";
 import { IS_TOUCH } from "../game/device";
 
@@ -48,6 +49,18 @@ const TOUCH_CONTROLS = [
 export default function ControlOverlay() {
   const setPhase = useGameStore((s) => s.setPhase);
   const controls = IS_TOUCH ? TOUCH_CONTROLS : MOUSE_CONTROLS;
+
+  // ESC 로 닫기 (메뉴로 복귀) — 키보드 포커스 링이 남지 않도록 blur
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        (document.activeElement as HTMLElement | null)?.blur();
+        setPhase("menu");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [setPhase]);
 
   return (
     <div className="overlay control">

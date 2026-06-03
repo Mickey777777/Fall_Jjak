@@ -11,6 +11,7 @@ const GAMEOVER_DELAY_MS = 1000;
 
 export default function App() {
   const phase = useGameStore((s) => s.phase);
+  const weather = useGameStore((s) => s.weather);
   const paused = phase !== "playing";
   const [showGameOver, setShowGameOver] = useState(false);
 
@@ -27,6 +28,8 @@ export default function App() {
       <div className="sky-bg" />
 
       <GameCanvas paused={paused} />
+      {/* 날씨별 화면 색감 — 페이즈와 무관하게 유지(죽어도 안 사라짐), 안개처럼 점진 전환 */}
+      <div className={`weather-grade weather-${weather}`} />
       {phase === "playing" && <HUD />}
 
       {phase === "menu" && <MainMenu />}
