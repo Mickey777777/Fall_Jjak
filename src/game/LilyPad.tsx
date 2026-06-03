@@ -23,6 +23,15 @@ const SLOSH_RING_PERIOD = 1.05; // 링 하나가 끝까지 퍼지는 시간 (느
 const SLOSH_RING_EXPAND = 1.5;  // 최대 확장 (pad 반경 배수) — 더 작게
 const SLOSH_RING_FADE = 1.9;    // 전체 감쇠율
 
+/** 점프 발사 출렁 반동의 수직 오프셋(m). elapsed = launchAt 이후 경과(초).
+ *  연잎(LilyPad)과 그 위 개구리(Frog)가 같은 값으로 함께 까딱이도록 공유한다. */
+export function launchBounceY(elapsed: number): number {
+  if (elapsed < 0 || elapsed >= LAUNCH_BOUNCE_DUR) return 0;
+  const decay = Math.exp(-elapsed * LAUNCH_DECAY);
+  const phase = LAUNCH_FREQ0 * elapsed + 0.5 * LAUNCH_FREQ_RAMP * elapsed * elapsed;
+  return -LAUNCH_DIP * Math.sin(phase) * decay;
+}
+
 interface Props {
   pad: LilyPadData;
   now: number;
@@ -145,19 +154,16 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
     let z = pad.position[2];
     let y = WORLD.PAD_TOP_Y - 0.22;
 
-    // 점프 발사 출렁 — 떠난 직후 쑥 눌렸다 감쇠 진동하며 복귀
-    let launchY = 0;
+    // 점프 발사 출렁 — 떠난 직후 쑥 눌렸다 감쇠 진동하며 복귀 (개구리도 같은 함수로 까딱)
+    const launchY = pad.launchAt != null ? launchBounceY(now - pad.launchAt) : 0;
     let launchSquash = 0;
     if (pad.launchAt != null) {
       const elapsed = now - pad.launchAt;
       if (elapsed >= 0 && elapsed < LAUNCH_BOUNCE_DUR) {
         const decay = Math.exp(-elapsed * LAUNCH_DECAY);
-        // 순간주파수가 시간에 비례해 증가 → 위상은 적분값 (ω0·t + ½·ramp·t²)
         const phase =
           LAUNCH_FREQ0 * elapsed + 0.5 * LAUNCH_FREQ_RAMP * elapsed * elapsed;
-        const wave = Math.sin(phase);
-        launchY = -LAUNCH_DIP * wave * decay; // 처음엔 느리게 아래로 쑥
-        launchSquash = 0.14 * Math.abs(wave) * decay;
+        launchSquash = 0.14 * Math.abs(Math.sin(phase)) * decay;
       }
     }
 

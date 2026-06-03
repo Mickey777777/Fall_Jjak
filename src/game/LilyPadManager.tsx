@@ -82,7 +82,7 @@ export default function LilyPadManager({ paused }: Props) {
   const setComboIdleWarn = useGameStore((s) => s.setComboIdleWarn);
 
   // ──────── 시뮬레이션 상태 (ref로 보관해 매 프레임 자유롭게 변경) ────────
-  const frog = useRef({ x: 0, y: 0, z: 0 });
+  const frog = useRef({ x: 0, y: 0, z: 0, padLaunchAt: 0 });
   const arcHeightRef = useRef(JUMP.BASE_ARC);
   const aimDirRef = useRef(0);
   const chargingRef = useRef(false);
@@ -185,7 +185,7 @@ export default function LilyPadManager({ paused }: Props) {
 
     // 화면 좌표 → 개구리 기준 조준 방향(±70° 제한)으로 갱신.
     // 빠른 클릭으로 mousemove가 누락되거나 점프 비행 중 갱신이 막혀도
-    // 조준이 최신이 되도록, 충전 시작(mousedown) 때도 호출한다.
+    // 조준이 최신이 되도록, 충전 시작(눌렀을 때)에도 호출한다.
     const updateAimFromClient = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect();
       mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
@@ -204,101 +204,38 @@ export default function LilyPadManager({ paused }: Props) {
       setAim(dir);
     };
 
-    const onMouseMove = (e: MouseEvent) => {
-      // 충전 중이면 드래그 거리 = 화면상 우클릭 시작점에서의 거리
-      if (chargingRef.current && chargeStartPx.current) {
-        const dx = e.clientX - chargeStartPx.current.x;
-        const dy = e.clientY - chargeStartPx.current.y;
-        const px = Math.hypot(dx, dy);
-        // rangeUp 버프는 "최댓값"만 늘림 — 최솟값과 평상시 사거리 감각은 그대로 유지
-        const hasRangeUp = useGameStore
-          .getState()
-          .buffs.some((b) => b.type === "rangeUp");
-        const maxDist = JUMP.MAX_DISTANCE * (hasRangeUp ? 1.3 : 1);
-        const dist = pixelsToDistance(px, maxDist);
-        chargeDistanceRef.current = dist;
-        setChargeDistance(dist);
-      } else if (!jumpPlanRef.current) {
-        updateAimFromClient(e.clientX, e.clientY);
-      }
+    // 충전(드래그) 시작점에서의 화면 거리 → 점프 거리로 변환.
+    const updateChargeFromDrag = (clientX: number, clientY: number) => {
+      if (!chargeStartPx.current) return;
+      const dx = clientX - chargeStartPx.current.x;
+      const dy = clientY - chargeStartPx.current.y;
+      const px = Math.hypot(dx, dy);
+      // rangeUp 버프는 "최댓값"만 늘림 — 최솟값과 평상시 사거리 감각은 그대로 유지
+      const hasRangeUp = useGameStore
+        .getState()
+        .buffs.some((b) => b.type === "rangeUp");
+      const maxDist = JUMP.MAX_DISTANCE * (hasRangeUp ? 1.3 : 1);
+      const dist = pixelsToDistance(px, maxDist);
+      chargeDistanceRef.current = dist;
+      setChargeDistance(dist);
     };
 
-    const onMouseDown = (e: MouseEvent) => {
-      if (paused) return;
-      if (e.button === 2) {
-        // 우클릭: 충전 시작
-        if (jumpPlanRef.current) return;
-        // 빠른 클릭 대비 — 누른 위치로 조준을 즉시 갱신 (mousemove 누락/비행 중 미갱신 보정)
-        updateAimFromClient(e.clientX, e.clientY);
-        chargingRef.current = true;
-        chargeStartPx.current = { x: e.clientX, y: e.clientY };
-        chargeDistanceRef.current = JUMP.MIN_DISTANCE;
-        setChargeDistance(JUMP.MIN_DISTANCE);
-        setCharging(true);
-      } else if (e.button === 0) {
-        // 좌클릭: 혀 낼름 + 파리 사냥 시도
-        // 클릭 지점으로 raycaster 재설정 — 파리는 공중에 있으므로 ground 투영이 아니라
-        // 실제 광선과 파리 3D 위치의 거리로 판정해야 정확하다.
-        const rect = canvas.getBoundingClientRect();
-        mouseNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouseNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-        raycaster.setFromCamera(mouseNdc, camera);
-        // 잡힌 파리의 월드 좌표 — 혀가 여기까지 뻗음 (없으면 기본 낼름)
-        let tonguePos: [number, number, number] | null = null;
-        setItems((list) => {
-          let collected = false;
-          const aim = aimDirRef.current;
-          const cosAim = Math.cos(aim);
-          const sinAim = Math.sin(aim);
-          const next = list.map((it) => {
-            if (it.collected) return it;
-            // 광선과 파리 3D 위치의 최단 거리
-            tmpVec.set(it.position[0], it.position[1], it.position[2]);
-            const d = raycaster.ray.distanceToPoint(tmpVec);
-            // 개구리와의 거리도 일정 이내여야 함
-            const fdx = it.position[0] - frog.current.x;
-            const fdz = it.position[2] - frog.current.z;
-            const fd = Math.hypot(fdx, fdz);
-            // 개구리는 고개를 못 돌리므로 정면에 있는 파리만 혀가 닿음
-            const forward = fdx * cosAim + fdz * sinAim;
-            // 혀 사거리 — 너무 멀리 있는 파리는 잡을 수 없음 (혀가 짧음)
-            if (d < 0.7 && fd < 3.2 && forward > 0) {
-              collected = true;
-              tonguePos = [it.position[0], it.position[1], it.position[2]];
-              incrementFlies();
-              const gained = addScore(SCORECONST.FLY_BONUS, "Great");
-              addPopup({
-                id: ++popupIdRef.current,
-                type: "Great",
-                text: `+${gained} 낼름!`,
-                position: [it.position[0], 2.0, it.position[2]],
-                bornAt: performance.now(),
-                score: gained,
-              });
-              if (it.type === "swim") addBuff({ type: "swim", remaining: 9999 });
-              if (it.type === "rangeUp")
-                addBuff({ type: "rangeUp", remaining: 8 });
-              if (it.type === "scoreBoost")
-                addBuff({ type: "scoreBoost", remaining: 6 });
-              playSlurp();
-              return { ...it, collected: true, collectedAt: performance.now() };
-            }
-            return it;
-          });
-          return collected ? next : list;
-        });
-        // 파리를 잡았으면 그 위치로 혀를 뻗고, 아니면 앞으로 짧게 낼름
-        triggerTongue(tonguePos);
-      }
+    // 충전 시작 — 누른 지점으로 조준을 고정하고 게이지를 켠다.
+    const beginCharge = (clientX: number, clientY: number) => {
+      if (jumpPlanRef.current) return;
+      updateAimFromClient(clientX, clientY);
+      chargingRef.current = true;
+      chargeStartPx.current = { x: clientX, y: clientY };
+      chargeDistanceRef.current = JUMP.MIN_DISTANCE;
+      setChargeDistance(JUMP.MIN_DISTANCE);
+      setCharging(true);
     };
 
-    const onMouseUp = (e: MouseEvent) => {
-      if (paused) return;
-      if (e.button !== 2) return;
+    // 충전 해제 → 점프 발사.
+    const releaseCharge = () => {
       if (!chargingRef.current) return;
       chargingRef.current = false;
       setCharging(false);
-      // 점프 발사
       if (jumpPlanRef.current) return;
       // 충전 시점에 이미 rangeUp 최댓값이 반영된 거리가 들어있음 — 추가 보정 불필요
       const dist = chargeDistanceRef.current;
@@ -307,7 +244,7 @@ export default function LilyPadManager({ paused }: Props) {
       const plan = makeJumpPlan(
         frog.current.x,
         frog.current.z,
-        finalAim,  // ← aimDirRef.current → finalAim
+        finalAim,
         dist,
         arcHeightRef.current,
         useGameStore.getState().wind,
@@ -316,7 +253,7 @@ export default function LilyPadManager({ paused }: Props) {
       jumpTimeRef.current = 0;
       slideRef.current = null;
       currentPadRef.current = null;
-      rotatingShiftRef.current = 0;  // ← 한 번 쓰고 초기화
+      rotatingShiftRef.current = 0; // ← 한 번 쓰고 초기화
       // 도약 발사 연출 — 떠나는 자리에 물 차고 오름 + 휙 사운드
       setLaunchAt({ x: frog.current.x, z: frog.current.z, bornAt: performance.now() });
       playWhoosh();
@@ -324,22 +261,175 @@ export default function LilyPadManager({ paused }: Props) {
       launchPadPosRef.current = { x: frog.current.x, z: frog.current.z };
     };
 
+    // 충전 취소(점프하지 않음) — 터치 취소(touchcancel) 등에 사용.
+    const cancelCharge = () => {
+      if (!chargingRef.current) return;
+      chargingRef.current = false;
+      setCharging(false);
+    };
+
+    // 혀 낼름 + 파리 사냥 시도. 좌클릭/탭 공용.
+    // 파리는 공중에 있으므로 ground 투영이 아니라 실제 광선과 파리 3D 위치의 거리로 판정한다.
+    const huntFly = (clientX: number, clientY: number) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseNdc.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouseNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(mouseNdc, camera);
+      // 잡힌 파리의 월드 좌표 — 혀가 여기까지 뻗음 (없으면 기본 낼름)
+      let tonguePos: [number, number, number] | null = null;
+      setItems((list) => {
+        let collected = false;
+        const aim = aimDirRef.current;
+        const cosAim = Math.cos(aim);
+        const sinAim = Math.sin(aim);
+        const next = list.map((it) => {
+          if (it.collected) return it;
+          // 광선과 파리 3D 위치의 최단 거리
+          tmpVec.set(it.position[0], it.position[1], it.position[2]);
+          const d = raycaster.ray.distanceToPoint(tmpVec);
+          // 개구리와의 거리도 일정 이내여야 함
+          const fdx = it.position[0] - frog.current.x;
+          const fdz = it.position[2] - frog.current.z;
+          const fd = Math.hypot(fdx, fdz);
+          // 개구리는 고개를 못 돌리므로 정면에 있는 파리만 혀가 닿음
+          const forward = fdx * cosAim + fdz * sinAim;
+          // 혀 사거리 — 너무 멀리 있는 파리는 잡을 수 없음 (혀가 짧음)
+          if (d < 0.7 && fd < 3.2 && forward > 0) {
+            collected = true;
+            tonguePos = [it.position[0], it.position[1], it.position[2]];
+            incrementFlies();
+            const gained = addScore(SCORECONST.FLY_BONUS, "Great");
+            addPopup({
+              id: ++popupIdRef.current,
+              type: "Great",
+              text: `+${gained} 낼름!`,
+              position: [it.position[0], 2.0, it.position[2]],
+              bornAt: performance.now(),
+              score: gained,
+            });
+            if (it.type === "swim") addBuff({ type: "swim", remaining: 9999 });
+            if (it.type === "rangeUp") addBuff({ type: "rangeUp", remaining: 8 });
+            if (it.type === "scoreBoost")
+              addBuff({ type: "scoreBoost", remaining: 6 });
+            playSlurp();
+            return { ...it, collected: true, collectedAt: performance.now() };
+          }
+          return it;
+        });
+        return collected ? next : list;
+      });
+      // 파리를 잡았으면 그 위치로 혀를 뻗고, 아니면 앞으로 짧게 낼름
+      triggerTongue(tonguePos);
+    };
+
+    // 궤적 높이 조절 (A/S 키 및 모바일 ▲/▼ 버튼 공용).
+    const adjustArc = (dir: 1 | -1) => {
+      arcHeightRef.current = Math.min(
+        JUMP.ARC_MAX,
+        Math.max(JUMP.ARC_MIN, arcHeightRef.current + dir * JUMP.ARC_STEP),
+      );
+      setArcHeight(arcHeightRef.current);
+    };
+
+    // ──────── 마우스 (데스크톱) ────────
+    const onMouseMove = (e: MouseEvent) => {
+      // 충전 중이면 드래그 거리 = 화면상 우클릭 시작점에서의 거리
+      if (chargingRef.current && chargeStartPx.current) {
+        updateChargeFromDrag(e.clientX, e.clientY);
+      } else if (!jumpPlanRef.current) {
+        updateAimFromClient(e.clientX, e.clientY);
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (paused) return;
+      if (e.button === 2) beginCharge(e.clientX, e.clientY); // 우클릭: 충전 시작
+      else if (e.button === 0) huntFly(e.clientX, e.clientY); // 좌클릭: 파리 사냥
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (paused) return;
+      if (e.button !== 2) return;
+      releaseCharge();
+    };
+
     const onContextMenu = (e: Event) => e.preventDefault();
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "KeyA") {
-        arcHeightRef.current = Math.min(
-          JUMP.ARC_MAX,
-          arcHeightRef.current + JUMP.ARC_STEP,
-        );
-        setArcHeight(arcHeightRef.current);
-      } else if (e.code === "KeyS") {
-        arcHeightRef.current = Math.max(
-          JUMP.ARC_MIN,
-          arcHeightRef.current - JUMP.ARC_STEP,
-        );
-        setArcHeight(arcHeightRef.current);
+      if (e.code === "KeyA") adjustArc(1);
+      else if (e.code === "KeyS") adjustArc(-1);
+    };
+
+    // 모바일 ▲/▼ 버튼 → 동일한 궤적 조절 로직 구동
+    const onArcEvent = (e: Event) => {
+      const dir = (e as CustomEvent<number>).detail;
+      adjustArc(dir > 0 ? 1 : -1);
+    };
+
+    // ──────── 터치 (모바일) ────────
+    // 한 손가락 드래그 = 조준+충전+점프, 가벼운 탭 = 파리 사냥.
+    // 끌기 임계값으로 둘을 구분해 의도치 않은 미니 점프(=익사)를 막는다.
+    const TOUCH_CHARGE_THRESHOLD = 16; // px — 이 이상 끌어야 탭이 아닌 충전으로 인식
+    let touchId: number | null = null;
+    let touchStart: { x: number; y: number } | null = null;
+    let touchCharged = false;
+
+    const getTrackedTouch = (e: TouchEvent) => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        if (t.identifier === touchId) return t;
       }
+      return null;
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      e.preventDefault(); // 스크롤/확대 및 합성 마우스 이벤트 방지
+      if (paused || touchId !== null) return; // 이미 한 손가락 추적 중이면 무시
+      const t = e.changedTouches[0];
+      touchId = t.identifier;
+      touchStart = { x: t.clientX, y: t.clientY };
+      touchCharged = false;
+      // 누른 지점으로 조준 고정 (데스크톱 우클릭 누름과 동일)
+      if (!jumpPlanRef.current) updateAimFromClient(t.clientX, t.clientY);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const t = getTrackedTouch(e);
+      if (!t || !touchStart) return;
+      e.preventDefault();
+      if (chargingRef.current) {
+        updateChargeFromDrag(t.clientX, t.clientY);
+        return;
+      }
+      const drag = Math.hypot(t.clientX - touchStart.x, t.clientY - touchStart.y);
+      if (drag > TOUCH_CHARGE_THRESHOLD && !jumpPlanRef.current) {
+        touchCharged = true;
+        beginCharge(touchStart.x, touchStart.y); // 충전 기준점 = 최초 터치 지점
+        updateChargeFromDrag(t.clientX, t.clientY);
+      }
+    };
+
+    const onTouchEnd = (e: TouchEvent) => {
+      const t = getTrackedTouch(e);
+      if (!t) return;
+      e.preventDefault();
+      if (chargingRef.current) {
+        releaseCharge();
+      } else if (!touchCharged && touchStart && !paused) {
+        // 끌지 않고 뗀 탭 → 파리 사냥 (미니 점프 발생 안 함)
+        huntFly(touchStart.x, touchStart.y);
+      }
+      touchId = null;
+      touchStart = null;
+      touchCharged = false;
+    };
+
+    const onTouchCancel = (e: TouchEvent) => {
+      if (!getTrackedTouch(e)) return;
+      cancelCharge();
+      touchId = null;
+      touchStart = null;
+      touchCharged = false;
     };
 
     canvas.addEventListener("mousemove", onMouseMove);
@@ -347,12 +437,22 @@ export default function LilyPadManager({ paused }: Props) {
     window.addEventListener("mouseup", onMouseUp);
     canvas.addEventListener("contextmenu", onContextMenu);
     window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("fj:arc", onArcEvent as EventListener);
+    canvas.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: false });
+    window.addEventListener("touchcancel", onTouchCancel, { passive: false });
     return () => {
       canvas.removeEventListener("mousemove", onMouseMove);
       canvas.removeEventListener("mousedown", onMouseDown);
       window.removeEventListener("mouseup", onMouseUp);
       canvas.removeEventListener("contextmenu", onContextMenu);
       window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("fj:arc", onArcEvent as EventListener);
+      canvas.removeEventListener("touchstart", onTouchStart);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchCancel);
     };
   }, [
     aimPlane,
@@ -804,12 +904,15 @@ export default function LilyPadManager({ paused }: Props) {
       shakeRef.current = Math.max(shakeRef.current, 0.3);
     }
 
-    // 착지 연잎에 파문 트리거
+    // 착지 연잎에 파문 + 출렁 반동(발사 때와 동일한 launchAt) 트리거
+    const landAt = performance.now() / 1000;
     setPads((list) =>
       list.map((p) =>
-        p.id === pad.id ? { ...p, rippleAt: performance.now() / 1000 } : p,
+        p.id === pad.id ? { ...p, rippleAt: landAt, launchAt: landAt } : p,
       ),
     );
+    // 개구리도 같은 타이밍으로 발판 출렁을 따라 까딱이도록
+    frog.current.padLaunchAt = landAt;
 
     addPopup({
       id: ++popupIdRef.current,

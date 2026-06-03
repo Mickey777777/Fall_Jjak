@@ -10,6 +10,7 @@ import {
 import Tree from "./Tree";
 import { initSlots, slotHash, updateSlots } from "./slotRecycler";
 import { useGameStore } from "../store/useGameStore";
+import { IS_TOUCH } from "./device";
 
 interface Props {
   frogX: number;
@@ -22,16 +23,19 @@ interface Props {
 const BANK_Z = 12.5;
 
 // 각 장식의 (instance 수, 슬롯 폭, cullBehind)
+// 모바일은 넓어진 FOV 탓에 둑이 더 멀리까지 보여, 나무 계열만 instance 수를 늘려
+// 앞쪽 배치 거리를 확장한다(커버리지 = (N-CULL)*SPACING). 데스크톱은 기존 그대로.
+// 활엽수(TREE/FAR_TREE)는 인스턴싱이 아니라 비싸므로 적당히, 인스턴스(PINE/ROCK)는 넉넉히.
 const GRASS = { N: 80, SPACING: 1.0, CULL: 12 };
-const TREE = { N: 14, SPACING: 4.5, CULL: 3 };
+const TREE = { N: IS_TOUCH ? 20 : 14, SPACING: 4.5, CULL: 3 };
 // 둑 너머 한 겹 더 깔리는 나무 — 앞 나무와 동일 크기·디테일 (원근 보정 없음), 약간 뒤에
-const FAR_TREE = { N: 12, SPACING: 5.5, CULL: 3 };
+const FAR_TREE = { N: IS_TOUCH ? 16 : 12, SPACING: 5.5, CULL: 3 };
 const FAR_TREE_ZOFF = 4.5; // BANK_Z 로부터의 깊이
 const FAR_TREE_ZJIT = 2.0;
 // 둑 너머 침엽수(뾰족 소나무, 3단 피라미드) + 바위 — 활엽수 사이에 섞어 식생 다양화
 // 앞 나무 줄(z+1.5~2.7) / 먼 나무 줄(z+4.5~6.5) 사이 갭에 바위, 침엽수는 먼 나무 줄에 합류
-const PINE = { N: 10, SPACING: 6.0, CULL: 3, ZOFF: 5.0, ZJIT: 2.5 };
-const ROCK = { N: 12, SPACING: 4.5, CULL: 3, ZOFF: 3.0, ZJIT: 1.4 };
+const PINE = { N: IS_TOUCH ? 16 : 10, SPACING: 6.0, CULL: 3, ZOFF: 5.0, ZJIT: 2.5 };
+const ROCK = { N: IS_TOUCH ? 18 : 12, SPACING: 4.5, CULL: 3, ZOFF: 3.0, ZJIT: 1.4 };
 const PINE_TRUNK_COLOR = "#5c4033";
 const PINE_LEAF_COLOR = "#3d7a4a";
 const ROCK_COLOR = "#9a9a9a";

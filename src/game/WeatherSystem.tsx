@@ -536,7 +536,6 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
   const leafColoredRef = useRef(false);
   useFrame((_, dt) => {
     if (!leafRef.current) return;
-    if (paused) return; // 일시정지 시 낙엽 정지
     // 최초 1회: 인스턴스별 색 지정 — 1/3은 분홍 꽃잎, 나머지는 낙엽 톤
     if (!leafColoredRef.current) {
       for (let i = 0; i < WIND_LEAF_N; i++) {
@@ -551,10 +550,12 @@ export default function WeatherSystem({ frogX, frogZ }: Props) {
       if (leafRef.current.instanceColor) leafRef.current.instanceColor.needsUpdate = true;
       leafColoredRef.current = true;
     }
+    // 강풍이 아니면 숨김(메뉴·다른 날씨 포함). paused보다 먼저 처리해 원점 흰 박스 노출 방지
     if (weather !== "wind") {
       leafRef.current.count = 0;
       return;
     }
+    if (paused) return; // 강풍 중 일시정지 → 현재 위치로 정지(count 유지)
     const t = performance.now() / 1000;
     const dirX = Math.cos(wind.direction);
     const dirZ = Math.sin(wind.direction);

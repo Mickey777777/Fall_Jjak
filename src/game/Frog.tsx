@@ -4,6 +4,7 @@ import { Vector3 } from "three";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { COLORS } from "./constants";
 import { useGameStore } from "../store/useGameStore";
+import { launchBounceY } from "./LilyPad";
 import type { BuffType } from "./types";
 
 // 버프 오라 — 활성 버프 1개당 발밑 링 1개 + 주위를 도는 반짝이
@@ -14,7 +15,7 @@ function buffAuraColor(t: BuffType) {
 }
 
 interface Props {
-  position: { x: number; y: number; z: number };
+  position: { x: number; y: number; z: number; padLaunchAt?: number };
   aimDirection: number;
   isCharging: boolean;
   isJumping: boolean;
@@ -179,7 +180,12 @@ export default function Frog({
     }
 
     const Y_LIFT = 0.22;
-    ref.current.position.set(position.x, position.y + Y_LIFT, position.z);
+    // 발판 출렁 따라 까딱 — 연잎에 서 있을 때만(점프·헤엄 중 제외)
+    const padBob =
+      !isJumping && !isSwimming && position.padLaunchAt != null
+        ? launchBounceY(performance.now() / 1000 - position.padLaunchAt)
+        : 0;
+    ref.current.position.set(position.x, position.y + Y_LIFT + padBob, position.z);
 
     // 부드러운 yaw 회전 (각도 wraparound 처리)
     // 헤엄 중에는 이동 방향(swimDir)을, 그 외엔 조준 방향을 향한다

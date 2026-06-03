@@ -1,8 +1,22 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useRef } from "react";
-import { Vector3 } from "three";
+import { PerspectiveCamera, Vector3 } from "three";
 import { WORLD } from "./constants";
 import { useGameStore } from "../store/useGameStore";
+
+const DEG = Math.PI / 180;
+
+/**
+ * 화면 비율에 맞춘 세로 FOV(도) 계산.
+ * Three.js의 fov는 '세로' 기준이라, 세로 모드(비율<1)에선 가로 시야가 급격히 좁아진다.
+ * 비율<1일 때는 가로 시야를 비율 1(정사각) 기준으로 유지하도록 세로 FOV를 키우고,
+ * 과도한 왜곡은 CAMERA_FOV_MAX로 제한한다. 가로 화면(비율≥1)은 기본값 그대로.
+ */
+function fovForAspect(aspect: number): number {
+  if (aspect >= 1) return WORLD.CAMERA_FOV;
+  const vfov = 2 * Math.atan(Math.tan((WORLD.CAMERA_FOV * DEG) / 2) / aspect);
+  return Math.min(WORLD.CAMERA_FOV_MAX, vfov / DEG);
+}
 
 interface Props {
   targetX: number;
@@ -28,8 +42,19 @@ export default function CameraController({
   const lookAt = useRef(new Vector3());
   const time = useRef(0);
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
     time.current += dt;
+
+    // 화면 비율에 맞춰 세로 FOV 보정 (세로 모드에서 가로 시야 확보)
+    if (camera instanceof PerspectiveCamera) {
+      const aspect = state.size.width / Math.max(1, state.size.height);
+      const fov = fovForAspect(aspect);
+      if (Math.abs(camera.fov - fov) > 0.05) {
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+      }
+    }
+
     const [ox, oy, oz] = WORLD.CAMERA_OFFSET;
     const zoom = zoomIn ? 0.85 : 1.0;
     desired.current.set(
