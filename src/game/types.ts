@@ -18,7 +18,7 @@ export type WeatherType = "clear" | "fog" | "wind" | "rain" | "cloud";
 
 export type EnemyType = "fish" | "bird" | "obstacle";
 
-export type BuffType = "rangeUp" | "swim" | "scoreBoost";
+export type BuffType = "rangeUp" | "swim" | "scoreBoost" | "comboFreeze";
 
 export interface LilyPadData {
   id: number;

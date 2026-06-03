@@ -220,6 +220,13 @@ export function playComboUp(tier: number) {
   if (tier >= 3) setTimeout(() => blip(base * 2, "sine", 0.16, 0.1), 220);
 }
 
+/** 콤보 프리징 발동 — 콤보를 지켜낸 순간의 차가운 반짝임(높은 사인 음 상행) */
+export function playComboFreeze() {
+  blip(1046, "sine", 0.12, 0.12); // C6
+  setTimeout(() => blip(1318, "sine", 0.12, 0.12), 60); // E6
+  setTimeout(() => blip(1568, "sine", 0.18, 0.11), 120); // G6
+}
+
 export function playCrocSnap() {
   // 악어 잡아먹는 소리 — 낮은 충격 + 찰칵
   blip(65, "sawtooth", 0.22, 0.32);

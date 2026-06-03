@@ -10,6 +10,7 @@ import {
   MoveHorizontal,
   RotateCw,
   Skull,
+  Snowflake,
   Sparkles,
   Star,
   Timer,
@@ -76,6 +77,12 @@ const BUFF_HELP: HelpItem[] = [
     name: "부스트",
     color: "#d65b9f",
     description: "일정 시간 동안 획득 점수가 증가합니다.",
+  },
+  {
+    Icon: Snowflake,
+    name: "콤보유지",
+    color: "#5ec4e8",
+    description: "콤보가 끊길 상황에서 한 번 콤보를 그대로 지켜줍니다.",
   },
 ];
 

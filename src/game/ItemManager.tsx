@@ -82,7 +82,9 @@ function ItemView({ item, now, frogRef }: { item: ItemData; now: number; frogRef
       ? "#f5e26b"
       : item.type === "swim"
         ? "#83d2ff"
-        : "#ff9bd1";
+        : item.type === "comboFreeze"
+          ? "#bfeeff"
+          : "#ff9bd1";
   return (
     <group ref={ref} position={item.position}>
       {/* 몸통 — 둥글둥글 통통한 큐브 */}

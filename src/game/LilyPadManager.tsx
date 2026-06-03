@@ -33,7 +33,7 @@ import type {
   LilyPadData,
   WeatherType,
 } from "./types";
-import { playComboBreak, playComboUp, playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring, playWhoosh } from "./sound";
+import { playComboBreak, playComboFreeze, playComboUp, playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring, playWhoosh } from "./sound";
 // 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
 const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
 
@@ -77,6 +77,7 @@ export default function LilyPadManager({ paused }: Props) {
   const tickBuffs = useGameStore((s) => s.tickBuffs);
   const addBuff = useGameStore((s) => s.addBuff);
   const consumeSwimBuff = useGameStore((s) => s.consumeSwimBuff);
+  const consumeComboFreeze = useGameStore((s) => s.consumeComboFreeze);
   const triggerTongue = useGameStore((s) => s.triggerTongue);
   const setCrocDanger = useGameStore((s) => s.setCrocDanger);
   const setComboIdleWarn = useGameStore((s) => s.setComboIdleWarn);
@@ -167,6 +168,7 @@ export default function LilyPadManager({ paused }: Props) {
       if (t === "swim") addBuff({ type: "swim", remaining: 9999 });
       else if (t === "rangeUp") addBuff({ type: "rangeUp", remaining: 999 });
       else if (t === "scoreBoost") addBuff({ type: "scoreBoost", remaining: 999 });
+      else if (t === "comboFreeze") addBuff({ type: "comboFreeze", remaining: 9999 });
     }
     if (DEBUG_FORCE_WEATHER) {
       const wind =
@@ -310,6 +312,8 @@ export default function LilyPadManager({ paused }: Props) {
             if (it.type === "rangeUp") addBuff({ type: "rangeUp", remaining: 8 });
             if (it.type === "scoreBoost")
               addBuff({ type: "scoreBoost", remaining: 6 });
+            // 콤보 프리징 — 시간제한 없는 1회성 (swim처럼 remaining 큰 값)
+            if (it.type === "comboFreeze") addBuff({ type: "comboFreeze", remaining: 9999 });
             playSlurp();
             return { ...it, collected: true, collectedAt: performance.now() };
           }
@@ -514,9 +518,22 @@ export default function LilyPadManager({ paused }: Props) {
           );
           const remaining = idleLimit - (now - lastLandAtRef.current);
           if (remaining <= 0) {
-            resetCombo();
-            setComboBreakAt({ x: frog.current.x, z: frog.current.z, bornAt: performance.now() });
-            playComboBreak();
+            // 콤보 프리징 보유 시 idle 끊김도 1회 막아줌 — 타이머만 리셋
+            if (consumeComboFreeze()) {
+              addPopup({
+                id: ++popupIdRef.current,
+                type: "Great",
+                text: "콤보 유지!",
+                position: [frog.current.x, 2.2, frog.current.z],
+                bornAt: performance.now(),
+                score: 0,
+              });
+              playComboFreeze();
+            } else {
+              resetCombo();
+              setComboBreakAt({ x: frog.current.x, z: frog.current.z, bornAt: performance.now() });
+              playComboBreak();
+            }
             lastLandAtRef.current = now; // 중복 발동 방지
           } else {
             // 남은 시간이 제한의 절반 이하로 떨어지면 0→1로 선형 상승 (절반=0, 임박=1)
@@ -870,11 +887,26 @@ export default function LilyPadManager({ paused }: Props) {
     }
     // 콤보 배율 적용 — NotBad는 콤보를 끊으므로 배율 혜택을 받지 않는다
     const combo = useGameStore.getState().combo;
+    // 콤보 프리징: NotBad로 콤보가 끊길 상황(콤보 1+)이면 1회 소모해 콤보 유지
+    const froze = j.type === "NotBad" && combo > 0 && consumeComboFreeze();
     const mult = j.type === "NotBad" ? 1 : comboMultiplier(combo);
     const raw = Math.round(j.baseScore * mult);
-    const gained = addScore(raw, j.type);
+    const gained = addScore(raw, j.type, froze);
     incrementPads();
     lastLandAtRef.current = performance.now() / 1000; // 콤보 idle 타이머 갱신
+
+    // 콤보 프리징 발동 — 콤보를 지켜낸 피드백 (얼음 반짝 팝업 + 사운드)
+    if (froze) {
+      addPopup({
+        id: ++popupIdRef.current,
+        type: "Great",
+        text: "콤보 유지!",
+        position: [pad.position[0], 2.2, pad.position[2]],
+        bornAt: performance.now(),
+        score: 0,
+      });
+      playComboFreeze();
+    }
 
     // 콤보 등급 상승 감지 — 배율이 한 단계 오른 순간 축하 버스트 (등급 5단위)
     const comboAfter = useGameStore.getState().combo;
@@ -888,7 +920,8 @@ export default function LilyPadManager({ paused }: Props) {
     }
 
     // 콤보 끊김 피드백 — 쌓인 콤보(3+)가 NotBad로 리셋되는 순간 회색 조각이 흩어져 떨어짐
-    if (j.type === "NotBad" && combo >= 3) {
+    // (프리징으로 콤보를 지켜냈으면 끊김 연출 생략)
+    if (j.type === "NotBad" && combo >= 3 && !froze) {
       setComboBreakAt({
         x: pad.position[0],
         z: pad.position[2],
@@ -1324,13 +1357,16 @@ export default function LilyPadManager({ paused }: Props) {
         // 아이템 스폰 — 디버그로 타입을 강제하면 매 연잎마다 항상 스폰 (물고기 디버그와 동일)
         const itemChance = DEBUG_FORCE_ITEM_TYPE ? 1 : 0.13;
         if (Math.random() < itemChance) {
+          const r = Math.random();
           const t: ItemData["type"] =
             DEBUG_FORCE_ITEM_TYPE ??
-            (Math.random() < 0.55
+            (r < 0.45
               ? "rangeUp"
-              : Math.random() < 0.7
+              : r < 0.65
                 ? "swim"
-                : "scoreBoost");
+                : r < 0.83
+                  ? "scoreBoost"
+                  : "comboFreeze");
           const item: ItemData = {
             id: ++itemIdRef.current,
             type: t,

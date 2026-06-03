@@ -65,7 +65,7 @@ interface GameState {
   setPhase: (p: GamePhase) => void;
   resetRun: () => void;
   finishRun: () => void;
-  addScore: (raw: number, judgment: JudgmentType) => number;
+  addScore: (raw: number, judgment: JudgmentType, keepCombo?: boolean) => number;
   resetCombo: () => void;
   addPopup: (popup: JudgmentPopup) => void;
   expirePopups: (now: number) => void;
@@ -78,6 +78,8 @@ interface GameState {
   addBuff: (b: ActiveBuff) => void;
   tickBuffs: (dt: number) => void;
   consumeSwimBuff: () => boolean;
+  /** 콤보 프리징 1회 소모 — 보유 시 true 반환하고 버프 제거 */
+  consumeComboFreeze: () => boolean;
   setDistance: (d: number) => void;
   incrementFlies: () => void;
   incrementPads: () => void;
@@ -152,13 +154,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set({ phase: "gameover", isCharging: false });
   },
-  addScore: (raw, judgment) => {
+  addScore: (raw, judgment, keepCombo = false) => {
     const { combo, buffs, score, maxCombo } = get();
     // 콤보 배율 계산은 ScoreSystem 쪽에서 처리하지만, 기본 합산은 여기서.
     const boost = buffs.find((b) => b.type === "scoreBoost") ? 1.5 : 1.0;
     const gained = Math.round(raw * boost);
-    const nextCombo =
-      judgment === "Yarr" || judgment === "Great" ? combo + 1 : 0;
+    // keepCombo(콤보 프리징 발동): 판정과 무관하게 현재 콤보를 그대로 유지
+    const nextCombo = keepCombo
+      ? combo
+      : judgment === "Yarr" || judgment === "Great"
+        ? combo + 1
+        : 0;
     set({
       score: score + gained,
       combo: nextCombo,
@@ -206,6 +212,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   consumeSwimBuff: () => {
     const { buffs } = get();
     const idx = buffs.findIndex((b) => b.type === "swim");
+    if (idx < 0) return false;
+    set({ buffs: buffs.filter((_, i) => i !== idx) });
+    return true;
+  },
+  consumeComboFreeze: () => {
+    const { buffs } = get();
+    const idx = buffs.findIndex((b) => b.type === "comboFreeze");
     if (idx < 0) return false;
     set({ buffs: buffs.filter((_, i) => i !== idx) });
     return true;

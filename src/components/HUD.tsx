@@ -11,6 +11,7 @@ import {
   CloudRain,
   Gauge,
   Pause,
+  Snowflake,
   Star,
   Volume2,
   VolumeX,
@@ -279,10 +280,12 @@ function getBuffMeta(t: BuffType) {
     rangeUp: { Icon: Gauge, label: "사거리" },
     swim: { Icon: Waves, label: "수영" },
     scoreBoost: { Icon: Star, label: "부스트" },
+    comboFreeze: { Icon: Snowflake, label: "콤보유지" },
   }[t];
 }
 function buffColor(t: BuffType) {
   return (
-    { rangeUp: "#f5e26b", swim: "#83d2ff", scoreBoost: "#ff9bd1" }[t] ?? "#ccc"
+    { rangeUp: "#f5e26b", swim: "#83d2ff", scoreBoost: "#ff9bd1", comboFreeze: "#bfeeff" }[t] ??
+    "#ccc"
   );
 }
