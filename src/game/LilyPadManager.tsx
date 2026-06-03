@@ -1419,6 +1419,8 @@ export default function LilyPadManager({ paused }: Props) {
   }
 
   // ──────── 렌더 ────────
+  // 한 렌더 안에서 모든 자식이 동일한 시각을 공유하도록 한 번만 구한다.
+  const now = gameNow();
   return (
     <>
       <CameraController
@@ -1455,21 +1457,21 @@ export default function LilyPadManager({ paused }: Props) {
         <LilyPad
           key={p.id}
           pad={p}
-          now={gameNow()}
+          now={now}
           isCandidate={p.id === candidatePadId}
           crocRef={crocRef}
         />
       ))}
-      <EnemyManager enemies={enemies} now={gameNow()} />
+      <EnemyManager enemies={enemies} now={now} />
       <CrocEnemy
         x={crocRef.current.x}
         z={crocRef.current.z}
-        now={gameNow()}
+        now={now}
         dist={Math.hypot(frog.current.x - crocRef.current.x, frog.current.z - crocRef.current.z)}
         caught={!!crocSnapAt}
         paused={trulyPaused}
       />
-      <ItemManager items={items} now={gameNow()} frogRef={frog} />
+      <ItemManager items={items} now={now} frogRef={frog} />
       <EffectsManager
         frogX={frog.current.x}
         frogZ={frog.current.z}

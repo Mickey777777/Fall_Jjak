@@ -64,18 +64,14 @@ export default function GameOverScreen() {
 function Stat({
   label,
   value,
-  highlight = false,
 }: {
   label: string;
   value: string;
-  highlight?: boolean;
 }) {
   return (
     <div className="stat">
       <div className="stat-label">{label}</div>
-      <div className={`stat-value ${highlight ? "record-value" : ""}`}>
-        {value}
-      </div>
+      <div className="stat-value">{value}</div>
     </div>
   );
 }

@@ -73,11 +73,6 @@ export function playJudgment(t: JudgmentType) {
   }
 }
 
-export function playPlop() {
-  blip(200, "sine", 0.18, 0.22);
-  setTimeout(() => blip(110, "sine", 0.25, 0.18), 60);
-}
-
 export function playSplash() {
   if (isMuted()) return;
   const c = getCtx();
