@@ -3,5 +3,6 @@
  */
 export const IS_TOUCH =
   typeof window !== "undefined" &&
-  typeof window.matchMedia === "function" &&
-  window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+  ((typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) ||
+    (typeof window.matchMedia === "function" &&
+      window.matchMedia("(any-pointer: coarse)").matches));
