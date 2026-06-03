@@ -561,6 +561,33 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.hypot(dx, dz) < p.radius) {
           // rotten 만료
           if (now - p.steppedAt >= LILY.ROTTEN_LIFETIME) {
+            const hasOtherSafeSupport = pads.some((other) => {
+              if (other.id === p.id || other.destroyed || other.type === "trap") return false;
+
+              let ox = other.position[0];
+              let oz = other.position[2];
+              if (other.type === "moving") {
+                const t = now - other.spawnTime;
+                const amp = other.amplitude ?? 1.4;
+                const freq = other.frequency ?? 0.8;
+                const offset = Math.sin(t * freq) * amp;
+                if (other.axis === "x") ox += offset;
+                else oz += offset;
+              }
+              if (Math.hypot(ox - fx, oz - fz) >= other.radius) return false;
+
+              if (
+                other.type === "blinking" &&
+                other.steppedAt == null &&
+                !swimStabilizedRef.current.has(other.id)
+              ) {
+                const cycle =
+                  ((now - other.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+                if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
+              }
+              return true;
+            });
+            if (hasOtherSafeSupport) continue;
             handleFall(frog.current.x, frog.current.z, p.id);
             return;
           }
