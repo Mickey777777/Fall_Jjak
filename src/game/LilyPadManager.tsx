@@ -1305,8 +1305,6 @@ export default function LilyPadManager({ paused }: Props) {
         
         const branchChance = Math.max(0.25, 0.55 - score / 1500);
         const branchCount = Math.random() < branchChance ? (Math.random() < 0.4 ? 2 : 1) : 0;
-        //                                                                       
-        //                                                                 
         for (let b = 0; b < branchCount; b++) {
           const bx = maxX - gap * (0.4 + Math.random() * 0.5);
           const bz = lat + (-zigSign) * (1.6 + Math.random() * 2.2);

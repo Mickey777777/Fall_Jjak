@@ -423,12 +423,10 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
         <>
           <mesh position={[0, padThickness * 1.1, 0]}>
             <cylinderGeometry args={[radius * 0.7, radius * 0.85, 0.18 * decoScale, 8]} />
-            {/*                                                   ^^^^^^^^^^^^^^^^ 추가 */}
             <meshStandardMaterial color={"#a8e833"} roughness={1} />
           </mesh>
           <mesh position={[0, padThickness * 1.3, 0]}>
             <torusGeometry args={[0.3 * decoScale, 0.06 * decoScale, 5, 8]} />
-            {/*                  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^ 추가 */}
             <meshStandardMaterial color={"#ffffff"} emissive={"#ff9ada"} emissiveIntensity={0.3} />
           </mesh>
         </>
@@ -438,7 +436,6 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
       {pad.type === "rotating" && (
         <mesh position={[0, padThickness * 0.85, 0]} rotation={[0, Math.PI / 4, 0]}>
           <boxGeometry args={[0.6 * decoScale, 0.04 * decoScale, 0.12 * decoScale]} />
-          {/*                  ^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 추가 */}
           <meshStandardMaterial color={"#8a6020"} roughness={1} />
         </mesh>
       )}
