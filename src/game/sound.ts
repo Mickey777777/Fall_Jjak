@@ -28,12 +28,11 @@ function isMuted() {
   return useGameStore.getState().muted;
 }
 
-function blip(
-  freq: number,
-  type: OscillatorType,
-  duration: number,
-  gain = 0.18,
-) {
+/**
+ * 공통 진입 가드: 음소거면 무시, 컨텍스트가 없으면 무시, suspended면 깨운다.
+ * fn에는 컨텍스트와 현재 시각(t0)을 넘긴다.
+ */
+function withCtx(fn: (c: AudioContext, t0: number) => void) {
   if (isMuted()) return;
   const c = getCtx();
   if (!c) return;
@@ -41,18 +40,67 @@ function blip(
     // 사용자 제스처가 있어야 재생됨. 한 번 시도해 깨운다.
     c.resume().catch(() => {});
   }
-  const t0 = c.currentTime;
-  const osc = c.createOscillator();
+  fn(c, c.currentTime);
+}
+
+/**
+ * 화이트노이즈 버스트 한 번 — 버퍼 생성 → 필터 → 게인 엔벨로프 → 재생.
+ * 게인 엔벨로프는 함수마다 다르므로 콜백(gainEnv)으로 받아 그대로 적용한다.
+ */
+function noiseBurst(
+  c: AudioContext,
+  t0: number,
+  opts: {
+    dur: number; // 노이즈 버퍼 길이(초)
+    decayFill?: boolean; // true면 진폭을 (1 - i/frames)로 감쇠시켜 채움
+    filter: { type: BiquadFilterType; freq: number; q?: number };
+    gainEnv: (g: GainNode, t0: number) => void;
+    stopAfter: number; // t0 이후 정지 시각(초)
+  },
+) {
+  const sr = c.sampleRate;
+  const frames = Math.ceil(sr * opts.dur);
+  const buf = c.createBuffer(1, frames, sr);
+  const d = buf.getChannelData(0);
+  if (opts.decayFill) {
+    for (let i = 0; i < frames; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+  } else {
+    for (let i = 0; i < frames; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const filter = c.createBiquadFilter();
+  filter.type = opts.filter.type;
+  filter.frequency.value = opts.filter.freq;
+  if (opts.filter.q != null) filter.Q.value = opts.filter.q;
   const g = c.createGain();
-  osc.type = type;
-  osc.frequency.setValueAtTime(freq, t0);
-  g.gain.setValueAtTime(0, t0);
-  g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
-  osc.connect(g);
+  opts.gainEnv(g, t0);
+  src.connect(filter);
+  filter.connect(g);
   g.connect(c.destination);
-  osc.start(t0);
-  osc.stop(t0 + duration + 0.02);
+  src.start(t0);
+  src.stop(t0 + opts.stopAfter);
+}
+
+function blip(
+  freq: number,
+  type: OscillatorType,
+  duration: number,
+  gain = 0.18,
+) {
+  withCtx((c, t0) => {
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+    osc.connect(g);
+    g.connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration + 0.02);
+  });
 }
 
 export function playJudgment(t: JudgmentType) {
@@ -74,40 +122,26 @@ export function playJudgment(t: JudgmentType) {
 }
 
 export function playSplash() {
-  if (isMuted()) return;
-  const c = getCtx();
-  if (!c) return;
-  if (c.state === "suspended") c.resume().catch(() => {});
+  withCtx((c, t0) => {
+    // 저음 충격
+    blip(75, "sine", 0.32, 0.30);
+    setTimeout(() => blip(115, "sine", 0.22, 0.22), 35);
 
-  // 저음 충격
-  blip(75, "sine", 0.32, 0.30);
-  setTimeout(() => blip(115, "sine", 0.22, 0.22), 35);
+    // 노이즈 버스트 (물 튀는 소리)
+    noiseBurst(c, t0, {
+      dur: 0.38,
+      filter: { type: "bandpass", freq: 1400, q: 0.7 },
+      gainEnv: (g, t0) => {
+        g.gain.setValueAtTime(0.14, t0);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.38);
+      },
+      stopAfter: 0.4,
+    });
 
-  // 노이즈 버스트 (물 튀는 소리)
-  const sr = c.sampleRate;
-  const frames = Math.ceil(sr * 0.38);
-  const buf = c.createBuffer(1, frames, sr);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < frames; i++) d[i] = Math.random() * 2 - 1;
-  const src = c.createBufferSource();
-  src.buffer = buf;
-  const bpf = c.createBiquadFilter();
-  bpf.type = "bandpass";
-  bpf.frequency.value = 1400;
-  bpf.Q.value = 0.7;
-  const g = c.createGain();
-  const t0 = c.currentTime;
-  g.gain.setValueAtTime(0.14, t0);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.38);
-  src.connect(bpf);
-  bpf.connect(g);
-  g.connect(c.destination);
-  src.start(t0);
-  src.stop(t0 + 0.4);
-
-  // 방울 떨어지는 고음
-  setTimeout(() => blip(750, "sine", 0.09, 0.06), 90);
-  setTimeout(() => blip(560, "sine", 0.11, 0.05), 160);
+    // 방울 떨어지는 고음
+    setTimeout(() => blip(750, "sine", 0.09, 0.06), 90);
+    setTimeout(() => blip(560, "sine", 0.11, 0.05), 160);
+  });
 }
 
 export function playSlurp() {
@@ -122,82 +156,57 @@ export function playSpring() {
 
 /** 점프 발사 — 짧게 솟구치는 "휙" (상승 피치 스윕 + 가벼운 바람 노이즈) */
 export function playWhoosh() {
-  if (isMuted()) return;
-  const c = getCtx();
-  if (!c) return;
-  if (c.state === "suspended") c.resume().catch(() => {});
-  const t0 = c.currentTime;
+  withCtx((c, t0) => {
+    // 상승 피치 스윕
+    const osc = c.createOscillator();
+    const g = c.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(260, t0);
+    osc.frequency.exponentialRampToValueAtTime(620, t0 + 0.16);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.linearRampToValueAtTime(0.12, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+    osc.connect(g);
+    g.connect(c.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.22);
 
-  // 상승 피치 스윕
-  const osc = c.createOscillator();
-  const g = c.createGain();
-  osc.type = "triangle";
-  osc.frequency.setValueAtTime(260, t0);
-  osc.frequency.exponentialRampToValueAtTime(620, t0 + 0.16);
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(0.12, t0 + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
-  osc.connect(g);
-  g.connect(c.destination);
-  osc.start(t0);
-  osc.stop(t0 + 0.22);
-
-  // 가벼운 바람 노이즈
-  const sr = c.sampleRate;
-  const frames = Math.ceil(sr * 0.16);
-  const buf = c.createBuffer(1, frames, sr);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < frames; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / frames);
-  const src = c.createBufferSource();
-  src.buffer = buf;
-  const hpf = c.createBiquadFilter();
-  hpf.type = "highpass";
-  hpf.frequency.value = 900;
-  const ng = c.createGain();
-  ng.gain.setValueAtTime(0.06, t0);
-  ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
-  src.connect(hpf);
-  hpf.connect(ng);
-  ng.connect(c.destination);
-  src.start(t0);
-  src.stop(t0 + 0.18);
+    // 가벼운 바람 노이즈
+    noiseBurst(c, t0, {
+      dur: 0.16,
+      decayFill: true,
+      filter: { type: "highpass", freq: 900 },
+      gainEnv: (g, t0) => {
+        g.gain.setValueAtTime(0.06, t0);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      },
+      stopAfter: 0.18,
+    });
+  });
 }
 
 /** 천둥 — 저주파 우르릉(필터 노이즈) + 초반 크랙. power 1=가까움(크고 밝게) / 0=멀리(작고 먹먹) */
 export function playThunder(power = 1) {
-  if (isMuted()) return;
-  const c = getCtx();
-  if (!c) return;
-  if (c.state === "suspended") c.resume().catch(() => {});
-  const t0 = c.currentTime;
-  const p = Math.max(0.2, Math.min(1, power));
+  withCtx((c, t0) => {
+    const p = Math.max(0.2, Math.min(1, power));
 
-  // 저주파 럼블 — 길게 감쇠하는 lowpass 노이즈 (멀수록 더 먹먹하게 컷)
-  const dur = 1.4 + p * 0.6;
-  const sr = c.sampleRate;
-  const frames = Math.ceil(sr * dur);
-  const buf = c.createBuffer(1, frames, sr);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < frames; i++) d[i] = Math.random() * 2 - 1;
-  const src = c.createBufferSource();
-  src.buffer = buf;
-  const lpf = c.createBiquadFilter();
-  lpf.type = "lowpass";
-  lpf.frequency.value = 180 + p * 220; // 가까울수록 고역 살아남음
-  lpf.Q.value = 0.6;
-  const g = c.createGain();
-  g.gain.setValueAtTime(0.0001, t0);
-  g.gain.linearRampToValueAtTime(0.34 * p, t0 + 0.05); // 초반 쾅
-  g.gain.exponentialRampToValueAtTime(0.13 * p, t0 + 0.5); // 우르릉
-  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  src.connect(lpf);
-  lpf.connect(g);
-  g.connect(c.destination);
-  src.start(t0);
-  src.stop(t0 + dur + 0.05);
+    // 저주파 럼블 — 길게 감쇠하는 lowpass 노이즈 (멀수록 더 먹먹하게 컷)
+    const dur = 1.4 + p * 0.6;
+    noiseBurst(c, t0, {
+      dur,
+      filter: { type: "lowpass", freq: 180 + p * 220, q: 0.6 }, // 가까울수록 고역 살아남음
+      gainEnv: (g, t0) => {
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.linearRampToValueAtTime(0.34 * p, t0 + 0.05); // 초반 쾅
+        g.gain.exponentialRampToValueAtTime(0.13 * p, t0 + 0.5); // 우르릉
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      },
+      stopAfter: dur + 0.05,
+    });
 
-  // 가까울 때만 또렷한 크랙 한 방
-  if (p > 0.6) blip(95, "sawtooth", 0.22, 0.12 * p);
+    // 가까울 때만 또렷한 크랙 한 방
+    if (p > 0.6) blip(95, "sawtooth", 0.22, 0.12 * p);
+  });
 }
 
 /** 콤보 끊김 — 쌓인 콤보가 리셋될 때의 하강 "뿜~" (실망감) */
