@@ -8,6 +8,21 @@ import type { LilyPadData } from "./types";
 const CROC_PUSH_RADIUS = 2.5;
 const CROC_PUSH_MAX    = 2.0;
 
+// 점프 발사 출렁 반동 — 물이 잦아들듯, 처음엔 크고 느리게 출렁이다
+// 점점 진폭은 줄고 주파수는 빨라진다(chirp).
+const LAUNCH_BOUNCE_DUR = 1.5;  // 초 (천천히 오래 출렁)
+const LAUNCH_DIP = 0.17;        // 최초 눌림 깊이(m)
+const LAUNCH_FREQ0 = 3.4;       // 시작 각주파수 (느릿한 첫 출렁)
+const LAUNCH_FREQ_RAMP = 7;     // 시간당 주파수 증가 (완만하게 빨라짐)
+const LAUNCH_DECAY = 3.0;       // 진폭 감쇠 (천천히 잦아듦)
+
+// 출렁에 따른 주변 물살 링 — 수면에 동심원으로 퍼졌다 잦아든다
+const SLOSH_RING_N = 4;         // 동시에 존재하는 링 수
+const SLOSH_RING_DUR = 1.5;     // 물살 지속 (출렁과 동일)
+const SLOSH_RING_PERIOD = 1.05; // 링 하나가 끝까지 퍼지는 시간 (느리게)
+const SLOSH_RING_EXPAND = 1.5;  // 최대 확장 (pad 반경 배수) — 더 작게
+const SLOSH_RING_FADE = 1.9;    // 전체 감쇠율
+
 interface Props {
   pad: LilyPadData;
   now: number;
@@ -32,6 +47,10 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
   const candidateRingRef = useRef<Mesh>(null);
   const candidateRingMatRef = useRef<MeshBasicMaterial>(null);
   const pushOffsetRef = useRef(0);
+  // 출렁 물살 링 (연잎과 별개로 수면에 남는 동심원)
+  const sloshGroupRef = useRef<Group>(null);
+  const sloshRefs = useRef<(Mesh | null)[]>([]);
+  const sloshMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   // pad 단위 의사난수
   const rnd = useMemo(() => {
@@ -126,6 +145,22 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
     let z = pad.position[2];
     let y = WORLD.PAD_TOP_Y - 0.22;
 
+    // 점프 발사 출렁 — 떠난 직후 쑥 눌렸다 감쇠 진동하며 복귀
+    let launchY = 0;
+    let launchSquash = 0;
+    if (pad.launchAt != null) {
+      const elapsed = now - pad.launchAt;
+      if (elapsed >= 0 && elapsed < LAUNCH_BOUNCE_DUR) {
+        const decay = Math.exp(-elapsed * LAUNCH_DECAY);
+        // 순간주파수가 시간에 비례해 증가 → 위상은 적분값 (ω0·t + ½·ramp·t²)
+        const phase =
+          LAUNCH_FREQ0 * elapsed + 0.5 * LAUNCH_FREQ_RAMP * elapsed * elapsed;
+        const wave = Math.sin(phase);
+        launchY = -LAUNCH_DIP * wave * decay; // 처음엔 느리게 아래로 쑥
+        launchSquash = 0.14 * Math.abs(wave) * decay;
+      }
+    }
+
     if (pad.type === "moving") {
       const amp = pad.amplitude ?? 1.4;
       const freq = pad.frequency ?? 0.8;
@@ -151,6 +186,14 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
     } else {
       ref.current.scale.set(1, 1, 1);
     }
+    // 출렁 스쿼시 — 눌릴 때 납작해지고 넓어짐 (기존 스케일에 곱)
+    if (launchSquash > 0.001) {
+      ref.current.scale.set(
+        ref.current.scale.x * (1 + launchSquash * 0.6),
+        ref.current.scale.y * (1 - launchSquash),
+        ref.current.scale.z * (1 + launchSquash * 0.6),
+      );
+    }
     const baseRot = pad.visualRotation ?? 0;
     if (pad.type === "rotating") {
       const dir = pad.rotationDirection ?? 1;
@@ -161,6 +204,8 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
     }
     // 가벼운 부유감
     y += Math.sin(t * 1.4 + pad.id) * 0.012;
+    // 점프 발사 출렁 반동
+    y += launchY;
 
     // 악어가 지나갈 때 Z축으로 밀려남 (복귀 없음 — 더 많이 밀릴 때만 갱신)
     if (crocRef?.current) {
@@ -205,9 +250,40 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
         candidateRingRef.current.visible = false;
       }
     }
+
+    // 출렁 물살 링 — 발사 후 수면에 동심원으로 퍼졌다 잦아든다.
+    // 연잎(ref)과 달리 출렁이지 않고 수면 높이에 머무르며, 연잎 x/z만 따라간다.
+    if (sloshGroupRef.current) {
+      const elapsed = pad.launchAt != null ? now - pad.launchAt : Infinity;
+      if (elapsed >= 0 && elapsed < SLOSH_RING_DUR) {
+        sloshGroupRef.current.visible = true;
+        // 수면 높이(연잎 안착 레벨 부근)에 고정 — 출렁 y는 더하지 않는다
+        sloshGroupRef.current.position.set(x, WORLD.PAD_TOP_Y - 0.22 + 0.02, z);
+        const env = Math.exp(-elapsed * SLOSH_RING_FADE); // 시간이 갈수록 전체적으로 옅게
+        for (let i = 0; i < SLOSH_RING_N; i++) {
+          const m = sloshRefs.current[i];
+          const mat = sloshMatRefs.current[i];
+          if (!m || !mat) continue;
+          const local = elapsed - i * (SLOSH_RING_PERIOD / SLOSH_RING_N);
+          if (local <= 0) {
+            m.visible = false;
+            continue;
+          }
+          const cyc = (local / SLOSH_RING_PERIOD) % 1; // 0→1 확장 반복
+          const s = radius * (1 + cyc * SLOSH_RING_EXPAND);
+          m.visible = true;
+          m.scale.set(s, s, s);
+          // 퍼질수록(테두리로 갈수록) + 시간이 갈수록 옅어짐
+          mat.opacity = (1 - cyc) * (1 - cyc) * 0.42 * env;
+        }
+      } else {
+        sloshGroupRef.current.visible = false;
+      }
+    }
   });
 
   return (
+    <>
     <group ref={ref} position={pad.position}>
       {/* 얇은 픽셀 물결 링 — 평상시엔 거의 안 보일 정도로 옅음 */}
       <mesh
@@ -371,5 +447,26 @@ export default function LilyPad({ pad, now, highlight, isCandidate, crocRef }: P
         </mesh>
       )}
     </group>
+
+    {/* 출렁 물살 링 — 연잎과 별개로 수면에 남는 동심원 (단위 반경 1, scale로 확장) */}
+    <group ref={sloshGroupRef} visible={false}>
+      {Array.from({ length: SLOSH_RING_N }).map((_, i) => (
+        <mesh
+          key={`slosh${i}`}
+          ref={(el) => { sloshRefs.current[i] = el; }}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <ringGeometry args={[0.9, 1.0, 28]} />
+          <meshBasicMaterial
+            ref={(m) => { sloshMatRefs.current[i] = m; }}
+            color="#dff4ff"
+            transparent
+            opacity={0}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+    </group>
+    </>
   );
 }

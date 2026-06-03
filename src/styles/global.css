@@ -73,6 +73,35 @@ body {
   color: #fff;
 }
 
+/* 날씨별 화면 색감(컬러 그레이드) — App 레벨(캔버스 위, HUD 아래). 안개처럼 천천히 전환 */
+.weather-grade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background: transparent;
+  transition: background 5s ease;
+}
+.weather-grade.weather-rain {
+  background: rgba(34, 56, 92, 0.26);
+}
+.weather-grade.weather-cloud {
+  background: rgba(48, 52, 70, 0.18);
+}
+.weather-grade.weather-fog {
+  background: rgba(206, 216, 220, 0.18);
+}
+
+/* 번개 흰 플래시 — 짧게 화면 전체가 번쩍 (opacity는 inline으로 구동) */
+.lightning-flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  background: radial-gradient(ellipse at 50% 28%, rgba(235, 242, 255, 0.95), rgba(200, 220, 255, 0.5) 55%, rgba(180, 205, 255, 0.2));
+}
+
+
 /* 좌상단 큰 점수 */
 .score-big {
   position: absolute;
@@ -132,6 +161,24 @@ body {
   }
   100% {
     transform: translateX(-50%) scale(1);
+  }
+}
+
+/* 콤보 끊김 임박 경고 — 칩이 붉게 깜빡이고 "곧 끊김!" 표시 (깜빡임 속도는 inline으로 가속) */
+.combo-chip.warn {
+  animation: comboWarnBlink 0.5s ease-in-out infinite;
+}
+.combo-chip.warn .combo-num {
+  color: #ff9a6d;
+}
+@keyframes comboWarnBlink {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+    filter: drop-shadow(0 0 calc(2px + var(--warn, 0) * 3px) rgba(255, 90, 50, calc(0.12 + var(--warn, 0) * 0.18)));
+  }
+  50% {
+    transform: translateX(-50%) scale(calc(1.02 + var(--warn, 0) * 0.05));
+    filter: drop-shadow(0 0 calc(4px + var(--warn, 0) * 12px) rgba(255, 90, 50, calc(0.3 + var(--warn, 0) * 0.5)));
   }
 }
 
@@ -256,6 +303,7 @@ body {
   justify-content: center;
   background: linear-gradient(180deg, rgba(168, 216, 216, 0.4), rgba(20, 28, 30, 0.6));
   backdrop-filter: blur(4px);
+  animation: overlayFade 0.32s ease both;
 }
 
 .card {
@@ -269,6 +317,16 @@ body {
   min-width: 340px;
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.25);
   align-items: stretch;
+  animation: cardRise 0.42s cubic-bezier(0.16, 1.2, 0.4, 1) both;
+}
+
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cardRise {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: none; }
 }
 .card.wide {
   min-width: 560px;
@@ -353,6 +411,15 @@ button.ghost {
   background: rgba(0, 0, 0, 0.05);
   color: var(--ink);
   border: 2px solid rgba(0, 0, 0, 0.12);
+}
+
+/* 메뉴 로고 등장 */
+.logo {
+  animation: cardRise 0.5s cubic-bezier(0.16, 1.2, 0.4, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .card, .logo { animation: none; }
 }
 
 .logo {

@@ -19,7 +19,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useGameStore } from "../store/useGameStore";
 
 type HelpTab = "weather" | "buff" | "lilypad" | "judgment";
@@ -181,6 +181,18 @@ export default function MainMenu() {
 
 function HelpDialog({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<HelpTab>("weather");
+
+  // ESC 로 닫기 — 포커스 보유 요소(도움말 버튼)의 키보드 포커스 링이 남지 않도록 blur
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        (document.activeElement as HTMLElement | null)?.blur();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const items =
     tab === "weather"
       ? WEATHER_HELP

@@ -31,6 +31,8 @@ export default function HUD() {
   const muted = useGameStore((s) => s.muted);
   const toggleMute = useGameStore((s) => s.toggleMute);
   const crocDanger = useGameStore((s) => s.crocDanger);
+  const comboIdleWarn = useGameStore((s) => s.comboIdleWarn);
+  const lightningFlash = useGameStore((s) => s.lightningFlash);
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -52,6 +54,10 @@ export default function HUD() {
 
   return (
     <div className="hud" onContextMenu={(e) => e.preventDefault()}>
+      {/* 번개 흰 플래시 */}
+      {lightningFlash > 0 && (
+        <div className="lightning-flash" style={{ opacity: lightningFlash * 0.55 }} />
+      )}
       {crocDanger > 0 && (
         <>
           <div
@@ -79,9 +85,22 @@ export default function HUD() {
         <div className="score-hi">BEST {highScore.toLocaleString()}</div>
       </div>
 
-      {/* 중앙 상단 — 콤보 칩 (콤보 1 이상일 때만 표시) */}
+      {/* 중앙 상단 — 콤보 칩 (콤보 1 이상일 때만 표시). idle 끊김 임박 시 붉게 깜빡임 */}
       {combo > 0 && (
-        <div className="combo-chip" key={combo}>
+        <div
+          className={`combo-chip${comboIdleWarn > 0 ? " warn" : ""}`}
+          key={combo}
+          style={
+            comboIdleWarn > 0
+              ? {
+                  // 느린 깜빡임(1.15s) → 임박할수록 빠르게(0.37s)
+                  animationDuration: `${(1.15 - comboIdleWarn * 0.78).toFixed(3)}s`,
+                  // 글로우·펄스 강도도 0→1로 램프 (CSS에서 var(--warn) 사용)
+                  ["--warn" as string]: comboIdleWarn,
+                }
+              : undefined
+          }
+        >
           <span className="combo-num">×{combo}</span>
           <span className="combo-mult">{mult.toFixed(1)}배</span>
         </div>

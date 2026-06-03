@@ -66,6 +66,7 @@ interface GameState {
   resetRun: () => void;
   finishRun: () => void;
   addScore: (raw: number, judgment: JudgmentType) => number;
+  resetCombo: () => void;
   addPopup: (popup: JudgmentPopup) => void;
   expirePopups: (now: number) => void;
   setAim: (rad: number) => void;
@@ -85,6 +86,15 @@ interface GameState {
   /** 악어 근접 위험도 0~1 (WARN_DIST=0 → KILL_DIST=1). 0이면 경고 숨김 */
   crocDanger: number;
   setCrocDanger: (v: number) => void;
+  /** 콤보 idle 끊김 경고 0~1 (남은 시간이 경고 구간 진입하면 0→1로 상승). 0이면 숨김 */
+  comboIdleWarn: number;
+  setComboIdleWarn: (v: number) => void;
+  /** 번개 섬광 세기 0~1 — HUD 흰 플래시 오버레이용 (WeatherSystem이 양자화해 갱신) */
+  lightningFlash: number;
+  setLightningFlash: (v: number) => void;
+  /** 가까운 번개 발생 타임스탬프 — LilyPadManager가 감지해 카메라 흔들림 */
+  lightningShakeAt: number;
+  setLightningShakeAt: (v: number) => void;
 }
 
 const initialRunState = {
@@ -107,6 +117,9 @@ const initialRunState = {
   wind: { direction: 0, strength: 0 } as WindState,
   buffs: [] as ActiveBuff[],
   crocDanger: 0,
+  comboIdleWarn: 0,
+  lightningFlash: 0,
+  lightningShakeAt: 0,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -146,6 +159,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastJudgmentAt: performance.now(),
     });
     return gained;
+  },
+  resetCombo: () => {
+    if (get().combo > 0) set({ combo: 0 });
   },
   addPopup: (popup) =>
     set((s) => ({
@@ -201,4 +217,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   setShowTutorial: (b) => set({ showTutorial: b }),
   setCrocDanger: (v) => set({ crocDanger: v }),
+  setComboIdleWarn: (v) => set({ comboIdleWarn: v }),
+  setLightningFlash: (v) => set({ lightningFlash: v }),
+  setLightningShakeAt: (v) => set({ lightningShakeAt: v }),
 }));

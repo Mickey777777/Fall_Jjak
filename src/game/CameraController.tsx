@@ -2,6 +2,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useRef } from "react";
 import { Vector3 } from "three";
 import { WORLD } from "./constants";
+import { useGameStore } from "../store/useGameStore";
 
 interface Props {
   targetX: number;
@@ -21,6 +22,8 @@ export default function CameraController({
   zoomIn = false,
 }: Props) {
   const { camera } = useThree();
+  const weather = useGameStore((s) => s.weather);
+  const wind = useGameStore((s) => s.wind);
   const desired = useRef(new Vector3());
   const lookAt = useRef(new Vector3());
   const time = useRef(0);
@@ -34,6 +37,14 @@ export default function CameraController({
       oy * zoom,
       targetZ + oz * zoom,
     );
+    // 강풍 — 바람 방향으로 저주파 드리프트 + 미세 버펫팅
+    if (weather === "wind" && wind.strength > 0) {
+      const t = time.current;
+      const s = wind.strength;
+      const sway = (Math.sin(t * 1.2) * 0.5 + Math.sin(t * 3.3) * 0.18) * s * 0.28;
+      desired.current.x += Math.cos(wind.direction) * sway + (Math.random() - 0.5) * s * 0.04;
+      desired.current.z += Math.sin(wind.direction) * sway + (Math.random() - 0.5) * s * 0.04;
+    }
     // shake
     if (shake > 0) {
       desired.current.x += (Math.random() - 0.5) * shake * 0.4;

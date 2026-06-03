@@ -1,9 +1,17 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Vector3 } from "three";
-import type { Group } from "three";
+import type { Group, Mesh, MeshBasicMaterial } from "three";
 import { COLORS } from "./constants";
 import { useGameStore } from "../store/useGameStore";
+import type { BuffType } from "./types";
+
+// 버프 오라 — 활성 버프 1개당 발밑 링 1개 + 주위를 도는 반짝이
+const AURA_SLOTS = 3;
+const AURA_SPARKLES = 5;
+function buffAuraColor(t: BuffType) {
+  return t === "rangeUp" ? "#f5e26b" : t === "swim" ? "#83d2ff" : "#ff9bd1";
+}
 
 interface Props {
   position: { x: number; y: number; z: number };
@@ -12,6 +20,9 @@ interface Props {
   isJumping: boolean;
   jumpProgress: number;
   isDead?: boolean;
+  isSwimming?: boolean;
+  /** 수영 글라이드 이동 방향(월드 각도) — 헤엄 중 머리가 이 방향을 향한다 */
+  swimDir?: number;
   crocSnap?: { cx: number; cz: number; bornAt: number } | null;
 }
 
@@ -40,6 +51,8 @@ export default function Frog({
   isJumping,
   jumpProgress,
   isDead = false,
+  isSwimming = false,
+  swimDir = 0,
   crocSnap = null,
 }: Props) {
   const ref = useRef<Group>(null);
@@ -48,7 +61,15 @@ export default function Frog({
   const tongueRef = useRef<Group>(null);
   const tongueAt = useGameStore((s) => s.tongueAt);
   const tongueTarget = useGameStore((s) => s.tongueTarget);
+  const buffs = useGameStore((s) => s.buffs);
+  const wind = useGameStore((s) => s.wind);
   const tongueTmp = useRef(new Vector3());
+  // 버프 오라 (몸체와 별개 그룹 → squash/회전 영향 안 받음)
+  const auraRef = useRef<Group>(null);
+  const auraRingRefs = useRef<(Mesh | null)[]>([]);
+  const auraRingMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
+  const sparkleRefs = useRef<(Mesh | null)[]>([]);
+  const sparkleMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
   // 회전 보간 상태
   const currentYaw = useRef(0);
   const currentPitch = useRef(0);
@@ -61,6 +82,52 @@ export default function Frog({
 
   useFrame(() => {
     if (!ref.current) return;
+
+    // 버프 오라 — 활성 버프 색으로 발밑 링이 맥동하고 반짝이가 주위를 돈다
+    if (auraRef.current) {
+      const showAura = !isDead && !crocSnap && buffs.length > 0;
+      auraRef.current.visible = showAura;
+      if (showAura) {
+        const tnow = performance.now() / 1000;
+        // 연잎 윗면(월드 ~0.18)보다 살짝 위에 링이 깔리도록 — 발밑이 연잎에 가려지지 않게
+        auraRef.current.position.set(position.x, position.y + 0.2, position.z);
+        for (let i = 0; i < AURA_SLOTS; i++) {
+          const m = auraRingRefs.current[i];
+          const mat = auraRingMatRefs.current[i];
+          if (!m || !mat) continue;
+          const b = buffs[i];
+          if (!b) {
+            m.visible = false;
+            continue;
+          }
+          m.visible = true;
+          mat.color.set(buffAuraColor(b.type));
+          const pulse = Math.sin(tnow * 4 + i * 1.3) * 0.5 + 0.5;
+          // 만료 임박(2초 미만, swim 제외) 시 빠르게 깜빡임
+          const expiring = b.type !== "swim" && b.remaining < 2;
+          const blink = expiring ? (Math.sin(tnow * 22) > 0 ? 1 : 0.2) : 1;
+          const s = 1 + i * 0.16 + pulse * 0.12;
+          m.scale.set(s, s, s);
+          mat.opacity = (0.22 + pulse * 0.22) * blink;
+        }
+        const primary = buffs[0];
+        for (let i = 0; i < AURA_SPARKLES; i++) {
+          const sp = sparkleRefs.current[i];
+          const spm = sparkleMatRefs.current[i];
+          if (!sp || !spm) continue;
+          spm.color.set(buffAuraColor(primary.type));
+          const a = tnow * 1.6 + (i / AURA_SPARKLES) * Math.PI * 2;
+          sp.position.set(
+            Math.cos(a) * 0.45,
+            0.1 + Math.sin(tnow * 3 + i) * 0.18,
+            Math.sin(a) * 0.45,
+          );
+          const tw = Math.sin(tnow * 6 + i * 2) * 0.5 + 0.5;
+          sp.scale.setScalar(0.05 + tw * 0.05);
+          spm.opacity = 0.4 + tw * 0.5;
+        }
+      }
+    }
 
     // 사망 시 물속으로 빠지는 애니메이션
     if (isDead) {
@@ -115,7 +182,9 @@ export default function Frog({
     ref.current.position.set(position.x, position.y + Y_LIFT, position.z);
 
     // 부드러운 yaw 회전 (각도 wraparound 처리)
-    const targetYaw = -aimDirection + Math.PI / 2;
+    // 헤엄 중에는 이동 방향(swimDir)을, 그 외엔 조준 방향을 향한다
+    const yawSource = isSwimming ? swimDir : aimDirection;
+    const targetYaw = -yawSource + Math.PI / 2;
     let diff = targetYaw - currentYaw.current;
     while (diff > Math.PI) diff -= Math.PI * 2;
     while (diff < -Math.PI) diff += Math.PI * 2;
@@ -129,8 +198,21 @@ export default function Frog({
     ref.current.rotation.order = "YXZ";
     ref.current.rotation.y = currentYaw.current;
     ref.current.rotation.x = currentPitch.current;
+    ref.current.rotation.z = 0;
 
-    if (isCharging) {
+    // 강풍 — 바람 쪽으로 살짝 기울임(버티는 자세). 헤엄 중엔 적용 안 함(헤엄이 rotation.z 사용)
+    if (!isSwimming && wind.strength > 0) {
+      const rel = wind.direction - aimDirection;
+      ref.current.rotation.z = -Math.sin(rel) * wind.strength * 0.22;
+      ref.current.rotation.x = currentPitch.current + Math.cos(rel) * wind.strength * 0.13;
+    }
+
+    if (isSwimming) {
+      // 헤엄 — 물 위에 납작하게 퍼져 좌우로 파닥이며 나아간다
+      const t = performance.now() * 0.018;
+      ref.current.scale.set(1.22 + Math.sin(t) * 0.06, 0.6, 1.12);
+      ref.current.rotation.z = Math.sin(t) * 0.12;
+    } else if (isCharging) {
       ref.current.scale.set(1.08, 0.7, 1.08);
     } else if (isJumping) {
       const s = 1 + Math.sin(jumpProgress * Math.PI) * 0.22;
@@ -190,6 +272,7 @@ export default function Frog({
   });
 
   return (
+    <>
     <group ref={ref}>
       {/* 몸통 - 낮고 넓은 큐브 */}
       <mesh castShadow position={[0, 0.12, -0.02]}>
@@ -279,5 +362,38 @@ export default function Frog({
         </mesh>
       </group>
     </group>
+
+    {/* 버프 오라 — 몸체와 별개 그룹(squash 영향 없음), useFrame에서 개구리를 따라감 */}
+    <group ref={auraRef} visible={false}>
+      {Array.from({ length: AURA_SLOTS }).map((_, i) => (
+        <mesh
+          key={`aura${i}`}
+          ref={(el) => { auraRingRefs.current[i] = el; }}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <ringGeometry args={[0.34, 0.5, 28]} />
+          <meshBasicMaterial
+            ref={(m) => { auraRingMatRefs.current[i] = m; }}
+            color="#ffffff"
+            transparent
+            opacity={0}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+      {Array.from({ length: AURA_SPARKLES }).map((_, i) => (
+        <mesh key={`spk${i}`} ref={(el) => { sparkleRefs.current[i] = el; }}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial
+            ref={(m) => { sparkleMatRefs.current[i] = m; }}
+            color="#ffffff"
+            transparent
+            opacity={0}
+            depthWrite={false}
+          />
+        </mesh>
+      ))}
+    </group>
+    </>
   );
 }

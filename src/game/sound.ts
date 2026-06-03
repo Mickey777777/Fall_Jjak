@@ -122,6 +122,104 @@ export function playSpring() {
   setTimeout(() => blip(720, "square", 0.1, 0.16), 60);
 }
 
+/** 점프 발사 — 짧게 솟구치는 "휙" (상승 피치 스윕 + 가벼운 바람 노이즈) */
+export function playWhoosh() {
+  if (isMuted()) return;
+  const c = getCtx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const t0 = c.currentTime;
+
+  // 상승 피치 스윕
+  const osc = c.createOscillator();
+  const g = c.createGain();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(260, t0);
+  osc.frequency.exponentialRampToValueAtTime(620, t0 + 0.16);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(0.12, t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+  osc.connect(g);
+  g.connect(c.destination);
+  osc.start(t0);
+  osc.stop(t0 + 0.22);
+
+  // 가벼운 바람 노이즈
+  const sr = c.sampleRate;
+  const frames = Math.ceil(sr * 0.16);
+  const buf = c.createBuffer(1, frames, sr);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < frames; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const hpf = c.createBiquadFilter();
+  hpf.type = "highpass";
+  hpf.frequency.value = 900;
+  const ng = c.createGain();
+  ng.gain.setValueAtTime(0.06, t0);
+  ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+  src.connect(hpf);
+  hpf.connect(ng);
+  ng.connect(c.destination);
+  src.start(t0);
+  src.stop(t0 + 0.18);
+}
+
+/** 천둥 — 저주파 우르릉(필터 노이즈) + 초반 크랙. power 1=가까움(크고 밝게) / 0=멀리(작고 먹먹) */
+export function playThunder(power = 1) {
+  if (isMuted()) return;
+  const c = getCtx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const t0 = c.currentTime;
+  const p = Math.max(0.2, Math.min(1, power));
+
+  // 저주파 럼블 — 길게 감쇠하는 lowpass 노이즈 (멀수록 더 먹먹하게 컷)
+  const dur = 1.4 + p * 0.6;
+  const sr = c.sampleRate;
+  const frames = Math.ceil(sr * dur);
+  const buf = c.createBuffer(1, frames, sr);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < frames; i++) d[i] = Math.random() * 2 - 1;
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const lpf = c.createBiquadFilter();
+  lpf.type = "lowpass";
+  lpf.frequency.value = 180 + p * 220; // 가까울수록 고역 살아남음
+  lpf.Q.value = 0.6;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(0.34 * p, t0 + 0.05); // 초반 쾅
+  g.gain.exponentialRampToValueAtTime(0.13 * p, t0 + 0.5); // 우르릉
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(lpf);
+  lpf.connect(g);
+  g.connect(c.destination);
+  src.start(t0);
+  src.stop(t0 + dur + 0.05);
+
+  // 가까울 때만 또렷한 크랙 한 방
+  if (p > 0.6) blip(95, "sawtooth", 0.22, 0.12 * p);
+}
+
+/** 콤보 끊김 — 쌓인 콤보가 리셋될 때의 하강 "뿜~" (실망감) */
+export function playComboBreak() {
+  blip(330, "triangle", 0.12, 0.13);
+  setTimeout(() => blip(247, "triangle", 0.14, 0.12), 80); // 단3도 아래
+  setTimeout(() => blip(165, "sine", 0.22, 0.12), 175); // 더 아래로 처짐
+}
+
+/** 콤보 등급 상승 — 등급(tier)이 높을수록 더 높은 음에서 시작하는 상승 아르페지오 */
+export function playComboUp(tier: number) {
+  // tier 0..N → 시작 음 상승 (반음 단위 비례)
+  const base = 523 * Math.pow(2, Math.min(tier, 8) / 12); // C5에서 반음씩
+  blip(base, "triangle", 0.1, 0.14);
+  setTimeout(() => blip(base * 1.26, "triangle", 0.1, 0.14), 70); // 장3도
+  setTimeout(() => blip(base * 1.5, "triangle", 0.14, 0.15), 145); // 완전5도
+  // 높은 등급일수록 옥타브 반짝임 추가
+  if (tier >= 3) setTimeout(() => blip(base * 2, "sine", 0.16, 0.1), 220);
+}
+
 export function playCrocSnap() {
   // 악어 잡아먹는 소리 — 낮은 충격 + 찰칵
   blip(65, "sawtooth", 0.22, 0.32);

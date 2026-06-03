@@ -38,6 +38,8 @@ export interface LilyPadData {
   visualScale?: number;
   // 착지 파문 트리거
   rippleAt?: number;
+  // 점프 발사 시 출렁 반동 트리거 (초 단위 timestamp)
+  launchAt?: number;
   rotationDirection?: 1 | -1;  // 1 = 반시계, -1 = 시계
   // 수영 복귀 점멸 연잎: 이 시간부터 줄어들기 시작 (null이면 아직 안정)
   swimShrinkAt?: number;
