@@ -31,6 +31,19 @@ const CROC_DUR = 900;
 const CROC_RINGS = 2;
 const CROC_SPIKES = 12;
 
+// 일회성 이펙트는 수명(age=1) 이후 5% 여유까지만 렌더하고 그 뒤엔 갱신을 멈춘다.
+const EFFECT_TAIL = 1.05;
+
+/**
+ * 일회성 이펙트의 수명 게이트 — bornAt/durMs로 age를 구하고, 그룹 가시성을
+ * EFFECT_TAIL 기준으로 토글한다. age와 계속 진행 여부(alive)를 돌려준다.
+ */
+function tickEffectGroup(group: Group | null, bornAt: number, durMs: number) {
+  const age = (gameNowMs() - bornAt) / durMs;
+  if (group) group.visible = age <= EFFECT_TAIL;
+  return { age, alive: age <= EFFECT_TAIL };
+}
+
 /**
  * 충전 중에만 보이는 공중 아치 점선 + 판정 popup.
  *
@@ -346,10 +359,8 @@ function SplashEffect({ splash }: { splash: { x: number; z: number; bornAt: numb
   const NUM_DROPS = DROP_PARAMS.length;
 
   useFrame(() => {
-    const age = (gameNowMs() - splash.bornAt) / SPLASH_DUR;
-    const grp = groupRef.current;
-    if (grp) grp.visible = age <= 1.05;
-    if (age > 1.05) return;
+    const { age, alive } = tickEffectGroup(groupRef.current, splash.bornAt, SPLASH_DUR);
+    if (!alive) return;
 
     const tSec = age * _S;
 
@@ -462,10 +473,8 @@ function CrocSnapEffect({ snap }: { snap: { x: number; z: number; bornAt: number
   const spikeMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   useFrame(() => {
-    const age = (gameNowMs() - snap.bornAt) / CROC_DUR;
-    const grp = groupRef.current;
-    if (grp) grp.visible = age <= 1.05;
-    if (age > 1.05) return;
+    const { age, alive } = tickEffectGroup(groupRef.current, snap.bornAt, CROC_DUR);
+    if (!alive) return;
 
     // 흰 플래시 (0~0.2)
     if (flashRef.current && flashMatRef.current) {
@@ -579,10 +588,8 @@ function LaunchEffect({ launch }: { launch: { x: number; z: number; bornAt: numb
   const dropMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   useFrame(() => {
-    const age = (gameNowMs() - launch.bornAt) / LAUNCH_DUR;
-    const grp = groupRef.current;
-    if (grp) grp.visible = age <= 1.05;
-    if (age > 1.05) return;
+    const { age, alive } = tickEffectGroup(groupRef.current, launch.bornAt, LAUNCH_DUR);
+    if (!alive) return;
     const tSec = age * (LAUNCH_DUR / 1000);
 
     // 발 차고 오르며 튀어오르는 물방울 (중력 낙하) — 동심원 물살은 연잎(LilyPad)이 담당
@@ -710,10 +717,8 @@ function ComboBreak({ brk }: { brk: { x: number; z: number; bornAt: number } }) 
   const shardMatRefs = useRef<(MeshBasicMaterial | null)[]>([]);
 
   useFrame(() => {
-    const age = (gameNowMs() - brk.bornAt) / BREAK_DUR;
-    const grp = groupRef.current;
-    if (grp) grp.visible = age <= 1.05;
-    if (age > 1.05) return;
+    const { age, alive } = tickEffectGroup(groupRef.current, brk.bornAt, BREAK_DUR);
+    if (!alive) return;
     const tSec = age * (BREAK_DUR / 1000);
 
     // 시작 순간 회색 플래시 — 콤보가 깨지는 타이밍을 확실히 알림
