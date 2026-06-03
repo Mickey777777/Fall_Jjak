@@ -4,6 +4,7 @@
  * 모든 튜닝 값은 여기에 모아둔다. 게임플레이가 어색하게 느껴진다면
  * 우선 이 파일의 숫자들을 만지는 것으로 시작.
  */
+import type { BuffType } from "./types";
 
 // ──────────────────────────────────────────────
 // 월드 / 카메라
@@ -196,6 +197,14 @@ export const COLORS = {
   FISH: "#5a8eab",
   BIRD: "#604224",
   CROC: "#3e572a",
+};
+
+// 버프 타입별 대표 색 — 개구리 오라 / HUD 칩 / 아이템 오라가 공유한다.
+export const BUFF_COLORS: Record<BuffType, string> = {
+  rangeUp: "#f5e26b",
+  swim: "#1f74e6",
+  scoreBoost: "#ff9bd1",
+  comboFreeze: "#bfeeff",
 };
 
 // ──────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "../store/useGameStore";
 import { comboMultiplier } from "../game/ScoreSystem";
-import { JUMP } from "../game/constants";
+import { BUFF_COLORS, JUMP } from "../game/constants";
 import type { BuffType, WeatherType } from "../game/types";
 import {
   ChevronDown,
@@ -302,8 +302,5 @@ function getBuffMeta(t: BuffType) {
   }[t];
 }
 function buffColor(t: BuffType) {
-  return (
-    { rangeUp: "#f5e26b", swim: "#1f74e6", scoreBoost: "#ff9bd1", comboFreeze: "#bfeeff" }[t] ??
-    "#ccc"
-  );
+  return BUFF_COLORS[t] ?? "#ccc";
 }

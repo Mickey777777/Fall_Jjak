@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Vector3 } from "three";
 import type { Group, Mesh, MeshBasicMaterial } from "three";
-import { COLORS } from "./constants";
+import { BUFF_COLORS, COLORS } from "./constants";
 import { useGameStore } from "../store/useGameStore";
 import { launchBounceY } from "./LilyPad";
 import { gameNow, gameNowMs } from "./gameClock";
@@ -12,13 +12,7 @@ import type { BuffType } from "./types";
 const AURA_SLOTS = 3;
 const AURA_SPARKLES = 5;
 function buffAuraColor(t: BuffType) {
-  return t === "rangeUp"
-    ? "#f5e26b"
-    : t === "swim"
-      ? "#1f74e6"
-      : t === "comboFreeze"
-        ? "#bfeeff"
-        : "#ff9bd1";
+  return BUFF_COLORS[t];
 }
 
 interface Props {

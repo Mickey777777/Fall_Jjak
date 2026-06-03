@@ -1,7 +1,7 @@
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import type { Group } from "three";
-import { COLORS } from "./constants";
+import { BUFF_COLORS, COLORS } from "./constants";
 import { gameNowMs } from "./gameClock";
 import type { ItemData } from "./types";
 
@@ -78,14 +78,7 @@ function ItemView({ item, now, frogRef }: { item: ItemData; now: number; frogRef
     if (wingLRef.current) wingLRef.current.rotation.z = 0.5 + flap;
     if (wingRRef.current) wingRRef.current.rotation.z = -0.5 - flap;
   });
-  const color =
-    item.type === "rangeUp"
-      ? "#f5e26b"
-      : item.type === "swim"
-        ? "#1f74e6"
-        : item.type === "comboFreeze"
-          ? "#bfeeff"
-          : "#ff9bd1";
+  const color = BUFF_COLORS[item.type];
   return (
     <group ref={ref} position={item.position}>
       {/* 몸통 — 둥글둥글 통통한 큐브 */}
