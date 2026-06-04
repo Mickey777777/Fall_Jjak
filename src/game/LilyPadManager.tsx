@@ -36,13 +36,13 @@ import type {
 import { playComboBreak, playComboFreeze, playComboUp, playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring, playWhoosh } from "./sound";
 import { gameNow, gameNowMs } from "./gameClock";
 // 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
-const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = "rotten";
+const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
 
 interface Props {
   paused: boolean;
 }
 // 🧪 디버그: 특정 파리(아이템)만 스폰 + 초반부터 항상 등장 (예: "swim" → 오라/수영 테스트). 끝나면 null로
-const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = "swim";
+const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
 // 🧪 디버그: 적(새/물고기) 항상 스폰, obstacle 제외 (테스트 끝나면 false로)
 const DEBUG_ALWAYS_SPAWN_ENEMY = false;
 // 🧪 디버그: 특정 적만 스폰 + 초반부터 항상 등장 ("fish"/"bird"/"obstacle"). 끝나면 null로
@@ -738,6 +738,34 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.hypot(dx, dz) < p.radius) {
           // rotten 만료
           if (now - p.steppedAt >= LILY.ROTTEN_LIFETIME) {
+            const hasOtherSafeSupport = pads.some((other) => {
+              if (other.id === p.id || other.destroyed || other.type === "trap") return false;
+              if (other.type === "rotten" && other.steppedAt != null) return false;
+
+              let ox = other.position[0];
+              let oz = other.position[2];
+              if (other.type === "moving") {
+                const t = now - other.spawnTime;
+                const amp = other.amplitude ?? 1.4;
+                const freq = other.frequency ?? 0.8;
+                const offset = Math.sin(t * freq) * amp;
+                if (other.axis === "x") ox += offset;
+                else oz += offset;
+              }
+              if (Math.hypot(ox - fx, oz - fz) >= other.radius) return false;
+
+              if (
+                other.type === "blinking" &&
+                other.steppedAt == null &&
+                !swimStabilizedRef.current.has(other.id)
+              ) {
+                const cycle =
+                  ((now - other.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+                if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
+              }
+              return true;
+            });
+            if (hasOtherSafeSupport) continue;
             handleFall(frog.current.x, frog.current.z, p.id);
             return;
           }
@@ -1377,7 +1405,7 @@ export default function LilyPadManager({ paused }: Props) {
           setEnemies((es) => [...es, enemy]);
         }
         // 아이템 스폰 — 디버그로 타입을 강제하면 매 연잎마다 항상 스폰 (물고기 디버그와 동일)
-        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 1 : 0.13;
+        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 0.13 : 0.13;
         if (Math.random() < itemChance) {
           const r = Math.random();
           const t: ItemData["type"] =
