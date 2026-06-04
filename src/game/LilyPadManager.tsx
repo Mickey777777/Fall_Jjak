@@ -738,6 +738,34 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.hypot(dx, dz) < p.radius) {
           // rotten 만료
           if (now - p.steppedAt >= LILY.ROTTEN_LIFETIME) {
+            const hasOtherSafeSupport = pads.some((other) => {
+              if (other.id === p.id || other.destroyed || other.type === "trap") return false;
+              if (other.type === "rotten" && other.steppedAt != null) return false;
+
+              let ox = other.position[0];
+              let oz = other.position[2];
+              if (other.type === "moving") {
+                const t = now - other.spawnTime;
+                const amp = other.amplitude ?? 1.4;
+                const freq = other.frequency ?? 0.8;
+                const offset = Math.sin(t * freq) * amp;
+                if (other.axis === "x") ox += offset;
+                else oz += offset;
+              }
+              if (Math.hypot(ox - fx, oz - fz) >= other.radius) return false;
+
+              if (
+                other.type === "blinking" &&
+                other.steppedAt == null &&
+                !swimStabilizedRef.current.has(other.id)
+              ) {
+                const cycle =
+                  ((now - other.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
+                if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
+              }
+              return true;
+            });
+            if (hasOtherSafeSupport) continue;
             handleFall(frog.current.x, frog.current.z, p.id);
             return;
           }
@@ -828,33 +856,7 @@ export default function LilyPadManager({ paused }: Props) {
         return;
       }
 
-      // swim으로 복귀한 점멸 연잎은 기존처럼 안정화 후 붕괴 처리
-      for (const { pad: p } of supportPads) {
-        if (p.type !== "blinking") continue;
-        if (!swimStabilizedRef.current.has(p.id)) continue;
-
-        if (p.steppedAt != null) {
-          const elapsed = now - p.steppedAt;
-
-          if (elapsed >= 1.0 + LILY.ROTTEN_LIFETIME) {
-            // 단, 이 점멸 연잎 말고 다른 안전 연잎도 같이 밟고 있으면 죽이지 않음
-            const otherSafe = supportPads.some(
-              ({ pad }) => pad.id !== p.id && isSupportSafe(pad),
-            );
-
-            if (!otherSafe) {
-              handleFall(frog.current.x, frog.current.z, p.id);
-              return;
-            }
-          } else if (elapsed >= 1.0 && p.swimShrinkAt == null) {
-            setPads((list) =>
-              list.map((pad) =>
-                pad.id === p.id ? { ...pad, swimShrinkAt: now } : pad,
-              ),
-            );
-          }
-        }
-      }
+      // 생존수영으로 복귀한 점멸 연잎은 안정화 상태로 유지한다.
 
 
   
@@ -1104,6 +1106,7 @@ export default function LilyPadManager({ paused }: Props) {
       const usable = pads.filter((p) => {
         if (p.type === "trap" || p.type === "spring") return false;
         if (p.id === excludePadId && !excludeIsBlinking) return false;
+        if (p.type === "rotten" && p.steppedAt != null) return false;
         if (p.type === "blinking" && p.steppedAt == null && !swimStabilizedRef.current.has(p.id)) {
           const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
           if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
@@ -1211,7 +1214,9 @@ export default function LilyPadManager({ paused }: Props) {
       // 점멸 연잎: 즉시 안정화 (stale state 방지 ref도 업데이트)
       swimStabilizedRef.current.add(padId);
       setPads((list) =>
-        list.map((p) => p.id === padId ? { ...p, steppedAt: nowSec } : p),
+        list.map((p) =>
+          p.id === padId ? { ...p, steppedAt: nowSec, swimShrinkAt: undefined } : p,
+        ),
       );
     } else if (origPad.type === "rotten") {
       // 삭은 연잎: steppedAt 설정해 타이머 시작 (1.2초 내 탈출 필요)
@@ -1400,7 +1405,7 @@ export default function LilyPadManager({ paused }: Props) {
           setEnemies((es) => [...es, enemy]);
         }
         // 아이템 스폰 — 디버그로 타입을 강제하면 매 연잎마다 항상 스폰 (물고기 디버그와 동일)
-        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 1 : 0.13;
+        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 0.13 : 0.13;
         if (Math.random() < itemChance) {
           const r = Math.random();
           const t: ItemData["type"] =
