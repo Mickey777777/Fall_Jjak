@@ -27,21 +27,31 @@ import { makeJumpPlan, pixelsToDistance, sampleJump } from "./JumpController";
 import { checkAirborneHit, nearestPad } from "./CollisionSystem";
 import { comboMultiplier, judgeLanding, judgmentText } from "./ScoreSystem";
 import type {
+  BuffType,
   EnemyData,
   ItemData,
   LilyPadData,
+  WeatherType,
 } from "./types";
-import { playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring } from "./sound";
+import { playComboBreak, playComboFreeze, playComboUp, playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring, playWhoosh } from "./sound";
+import { gameNow, gameNowMs } from "./gameClock";
 // 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
 const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
 
 interface Props {
   paused: boolean;
 }
-// 🧪 디버그: 특정 아이템만 스폰 (테스트 끝나면 null로)
+// 🧪 디버그: 특정 파리(아이템)만 스폰 + 초반부터 항상 등장 (예: "swim" → 오라/수영 테스트). 끝나면 null로
 const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
 // 🧪 디버그: 적(새/물고기) 항상 스폰, obstacle 제외 (테스트 끝나면 false로)
 const DEBUG_ALWAYS_SPAWN_ENEMY = false;
+// 🧪 디버그: 특정 적만 스폰 + 초반부터 항상 등장 ("fish"/"bird"/"obstacle"). 끝나면 null로
+// (fish+bird 둘 다 한꺼번에 보려면 이 값을 null로 두고 DEBUG_ALWAYS_SPAWN_ENEMY=true)
+const DEBUG_FORCE_ENEMY_TYPE: EnemyData["type"] | null = null;
+// 🧪 디버그: 게임 시작 시 들고 시작할 버프 (예: ["swim"] → 수영 부활 테스트). 끝나면 [] 로
+const DEBUG_START_BUFFS: BuffType[] = [];
+// 🧪 디버그: 날씨 고정 (예: "rain" → 폭우/번개 테스트). 자동 사이클 중단. 끝나면 null로
+const DEBUG_FORCE_WEATHER: WeatherType | null = null;
 /**
  * 게임의 메인 시뮬레이션 루프.
  *
@@ -58,6 +68,7 @@ export default function LilyPadManager({ paused }: Props) {
   const setCharging = useGameStore((s) => s.setCharging);
   const setDistance = useGameStore((s) => s.setDistance);
   const addScore = useGameStore((s) => s.addScore);
+  const resetCombo = useGameStore((s) => s.resetCombo);
   const addPopup = useGameStore((s) => s.addPopup);
   const expirePopups = useGameStore((s) => s.expirePopups);
   const incrementFlies = useGameStore((s) => s.incrementFlies);
@@ -67,11 +78,16 @@ export default function LilyPadManager({ paused }: Props) {
   const tickBuffs = useGameStore((s) => s.tickBuffs);
   const addBuff = useGameStore((s) => s.addBuff);
   const consumeSwimBuff = useGameStore((s) => s.consumeSwimBuff);
+  const consumeComboFreeze = useGameStore((s) => s.consumeComboFreeze);
   const triggerTongue = useGameStore((s) => s.triggerTongue);
   const setCrocDanger = useGameStore((s) => s.setCrocDanger);
+  const setComboIdleWarn = useGameStore((s) => s.setComboIdleWarn);
+  // 진짜 일시정지(=paused 페이즈)인지 — 게임오버/메뉴는 사망 연출이 재생돼야 하므로 제외.
+  // 델타 기반 모션(악어)을 멈출 때 이 값을 쓴다 (게임 시계 정지 조건과 동일).
+  const trulyPaused = useGameStore((s) => s.phase === "paused");
 
   // ──────── 시뮬레이션 상태 (ref로 보관해 매 프레임 자유롭게 변경) ────────
-  const frog = useRef({ x: 0, y: 0, z: 0 });
+  const frog = useRef({ x: 0, y: 0, z: 0, padLaunchAt: 0 });
   const arcHeightRef = useRef(JUMP.BASE_ARC);
   const aimDirRef = useRef(0);
   const chargingRef = useRef(false);
@@ -79,7 +95,7 @@ export default function LilyPadManager({ paused }: Props) {
   const chargeDistanceRef = useRef(JUMP.MIN_DISTANCE);
   const jumpPlanRef = useRef<ReturnType<typeof makeJumpPlan> | null>(null);
   const jumpTimeRef = useRef(0);
-  const lastFrameRef = useRef(performance.now() / 1000);
+  const lastFrameRef = useRef(gameNow());
   const padIdRef = useRef(1);
   const enemyIdRef = useRef(1);
   const itemIdRef = useRef(1);
@@ -88,8 +104,16 @@ export default function LilyPadManager({ paused }: Props) {
   const nextWeatherIn = useRef(20);
   const shakeRef = useRef(0);
   const zoomRef = useRef(false);
+  // 마지막 착지 시각(초) — 이후 일정 시간 머뭇거리면 콤보 초기화
+  const lastLandAtRef = useRef(gameNow());
+  const comboIdleWarnRef = useRef(-1); // 마지막으로 store에 쓴 양자화 경고값 (재렌더 최소화)
+  const lastLightningShakeRef = useRef(useGameStore.getState().lightningShakeAt); // 마지막 처리한 번개 흔들림 타임스탬프
   const [yarrBurst, setYarrBurst] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [splashAt, setSplashAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
+  // 수영 부활 전용 물보라 — splashAt(죽음 신호)과 분리 (isDead 트리거 방지)
+  const [swimSplashAt, setSwimSplashAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
+  const [launchAt, setLaunchAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
+  const [comboBreakAt, setComboBreakAt] = useState<{ x: number; z: number; bornAt: number } | null>(null);
   const [crocSnapAt, setCrocSnapAt] = useState<{ x: number; z: number; cx: number; cz: number; bornAt: number } | null>(null);
 
   // 악어 위치 (월드 좌표)
@@ -104,6 +128,19 @@ export default function LilyPadManager({ paused }: Props) {
     duration: number;
   } | null>(null);
   const swimStabilizedRef = useRef(new Set<number>());
+  // 점프 발사 시 떠난 연잎에 출렁 반동을 줄 대기 위치 (프레임 루프에서 가장 가까운 연잎에 태그)
+  const launchPadPosRef = useRef<{ x: number; z: number } | null>(null);
+  // 수영 부활 헤엄 글라이드 — 떨어진 지점에서 목표 연잎까지 물 위를 헤엄쳐 이동
+  const swimGlideRef = useRef<{
+    fromX: number;
+    fromZ: number;
+    toX: number;
+    toZ: number;
+    padId: number;
+    startedAt: number; // gameNow()
+    duration: number;
+    splashFired: boolean; // 도착 직전 물보라를 미리 한 번만 터뜨렸는지
+  } | null>(null);
   const rotatingShiftRef = useRef(0);
   const currentPadRef = useRef<{
     padId: number;
@@ -128,6 +165,24 @@ export default function LilyPadManager({ paused }: Props) {
   const [enemies, setEnemies] = useState<EnemyData[]>([]);
   const [items, setItems] = useState<ItemData[]>([]);
   const [, forceRender] = useState(0);
+
+  // 🧪 디버그: 게임 시작 시 버프 부여 + 날씨 고정. 컴포넌트는 runId마다 리마운트되므로 매 게임 1회 실행
+  useEffect(() => {
+    for (const t of DEBUG_START_BUFFS) {
+      if (t === "swim") addBuff({ type: "swim", remaining: 9999 });
+      else if (t === "rangeUp") addBuff({ type: "rangeUp", remaining: 999 });
+      else if (t === "scoreBoost") addBuff({ type: "scoreBoost", remaining: 999 });
+      else if (t === "comboFreeze") addBuff({ type: "comboFreeze", remaining: 9999 });
+    }
+    if (DEBUG_FORCE_WEATHER) {
+      const wind =
+        DEBUG_FORCE_WEATHER === "wind"
+          ? { direction: (Math.random() - 0.5) * Math.PI, strength: 0.8 }
+          : { direction: 0, strength: 0 };
+      setWeather(DEBUG_FORCE_WEATHER, wind);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ──────── 입력 핸들러 ────────
   useEffect(() => {
@@ -204,6 +259,11 @@ export default function LilyPadManager({ paused }: Props) {
       slideRef.current = null;
       currentPadRef.current = null;
       rotatingShiftRef.current = 0; // ← 한 번 쓰고 초기화
+      // 도약 발사 연출 — 떠나는 자리에 물 차고 오름 + 휙 사운드
+      setLaunchAt({ x: frog.current.x, z: frog.current.z, bornAt: gameNowMs() });
+      playWhoosh();
+      // 떠난 연잎이 다이빙대처럼 출렁이도록 — 프레임 루프에서 가장 가까운 연잎에 태그
+      launchPadPosRef.current = { x: frog.current.x, z: frog.current.z };
     };
 
     // 충전 취소(점프하지 않음) — 터치 취소(touchcancel) 등에 사용.
@@ -249,15 +309,17 @@ export default function LilyPadManager({ paused }: Props) {
               type: "Great",
               text: `+${gained} 낼름!`,
               position: [it.position[0], 2.0, it.position[2]],
-              bornAt: performance.now(),
+              bornAt: gameNowMs(),
               score: gained,
             });
             if (it.type === "swim") addBuff({ type: "swim", remaining: 9999 });
             if (it.type === "rangeUp") addBuff({ type: "rangeUp", remaining: 8 });
             if (it.type === "scoreBoost")
               addBuff({ type: "scoreBoost", remaining: 6 });
+            // 콤보 프리징 — 시간제한 없는 1회성 (swim처럼 remaining 큰 값)
+            if (it.type === "comboFreeze") addBuff({ type: "comboFreeze", remaining: 9999 });
             playSlurp();
-            return { ...it, collected: true, collectedAt: performance.now() };
+            return { ...it, collected: true, collectedAt: gameNowMs() };
           }
           return it;
         });
@@ -419,7 +481,7 @@ export default function LilyPadManager({ paused }: Props) {
 
   // ──────── 시뮬레이션 루프 ────────
   useFrame(() => {
-    const now = performance.now() / 1000;
+    const now = gameNow();
     const dt = Math.min(0.05, now - lastFrameRef.current);
     lastFrameRef.current = now;
     // paused 여부와 관계없이 shake는 항상 감쇠
@@ -430,8 +492,123 @@ export default function LilyPadManager({ paused }: Props) {
       return;
     }
 
-    expirePopups(performance.now());
+    expirePopups(gameNowMs());
     tickBuffs(dt);
+
+    // 가까운 번개 — 카메라 흔들림 (WeatherSystem이 lightningShakeAt 갱신)
+    {
+      const lsa = useGameStore.getState().lightningShakeAt;
+      if (lsa !== lastLightningShakeRef.current) {
+        lastLightningShakeRef.current = lsa;
+        if (lsa > 0) shakeRef.current = Math.max(shakeRef.current, 0.55);
+      }
+    }
+
+    // ── 콤보 idle 리셋 + 끊김 경고 ──
+    // 제한 시간 = 기본 10초에서 콤보 배율 등급이 오를 때마다 0.5초씩 감소(최소 2초).
+    // 남은 시간이 경고 구간(COMBO_IDLE_WARN_WINDOW)에 들면 0→1 경고값을 HUD로 보낸다.
+    // 비행 중·수영 복귀 중에는 행동 중이므로 제외.
+    {
+      let warn = 0;
+      if (!jumpPlanRef.current && !swimGlideRef.current) {
+        const combo = useGameStore.getState().combo;
+        if (combo > 0) {
+          const tiers = SCORECONST.COMBO_TIERS.filter(
+            (tt) => tt.combo > 0 && combo >= tt.combo,
+          ).length;
+          const idleLimit = Math.max(
+            SCORECONST.COMBO_IDLE_RESET_MIN,
+            SCORECONST.COMBO_IDLE_RESET_BASE - tiers * SCORECONST.COMBO_IDLE_RESET_PER_TIER,
+          );
+          const remaining = idleLimit - (now - lastLandAtRef.current);
+          if (remaining <= 0) {
+            // 콤보 프리징 보유 시 idle 끊김도 1회 막아줌 — 타이머만 리셋
+            if (consumeComboFreeze()) {
+              addPopup({
+                id: ++popupIdRef.current,
+                type: "Great",
+                text: "콤보 유지!",
+                position: [frog.current.x, 2.2, frog.current.z],
+                bornAt: gameNowMs(),
+                score: 0,
+              });
+              useGameStore.getState().triggerComboFreeze();
+              playComboFreeze();
+            } else {
+              resetCombo();
+              setComboBreakAt({ x: frog.current.x, z: frog.current.z, bornAt: gameNowMs() });
+              playComboBreak();
+            }
+            lastLandAtRef.current = now; // 중복 발동 방지
+          } else {
+            // 남은 시간이 제한의 절반 이하로 떨어지면 0→1로 선형 상승 (절반=0, 임박=1)
+            const warnStart = idleLimit * SCORECONST.COMBO_IDLE_WARN_FRACTION;
+            warn = remaining < warnStart ? Math.min(1, (warnStart - remaining) / warnStart) : 0;
+          }
+        }
+      }
+      // 0.05 단계로 양자화해 변할 때만 store 갱신 (재렌더 최소화)
+      const qWarn = Math.round(warn * 20) / 20;
+      if (qWarn !== comboIdleWarnRef.current) {
+        comboIdleWarnRef.current = qWarn;
+        setComboIdleWarn(qWarn);
+      }
+    }
+
+    // ── 수영 부활 헤엄 글라이드 ──
+    // 물 위를 헤엄쳐 목표 연잎으로 이동하는 동안은 다른 시뮬레이션(착지·낙하·악어)을 멈춘다.
+    if (swimGlideRef.current) {
+      const g = swimGlideRef.current;
+      const t = Math.min(1, (now - g.startedAt) / g.duration);
+      const ease = t * t * (3 - 2 * t); // smoothstep
+      frog.current.x = g.fromX + (g.toX - g.fromX) * ease;
+      frog.current.z = g.fromZ + (g.toZ - g.fromZ) * ease;
+      // 살짝 잠겼다가 도착하며 떠오름 (반원 dip)
+      frog.current.y = -Math.sin(t * Math.PI) * 0.28;
+      // 연잎에 올라설 즈음(중앙 도착 전) 미리 솟아오르는 물보라 — 도착 시점보다 빠르게
+      if (!g.splashFired && t >= 0.7) {
+        g.splashFired = true;
+        setSwimSplashAt({ x: g.toX, z: g.toZ, bornAt: gameNowMs() });
+        playSplash();
+      }
+      if (t >= 1) {
+        const arrived = swimGlideRef.current;
+        swimGlideRef.current = null;
+        arriveFromSwim(arrived.padId, arrived.toX, arrived.toZ);
+      }
+      forceRender((x) => x + 1); // 카메라·헤엄 포즈가 매 프레임 따라오도록
+      return;
+    }
+
+    // ── 점프 발사 출렁: 떠난 위치에서 가장 가까운 연잎에 launchAt 태그 ──
+    if (launchPadPosRef.current) {
+      const lp = launchPadPosRef.current;
+      launchPadPosRef.current = null;
+      let bestId: number | null = null;
+      let bestD = Infinity;
+      for (const p of pads) {
+        if (p.destroyed) continue;
+        // 이동 연잎은 현재 시각 위치로 보정
+        let px = p.position[0];
+        let pz = p.position[2];
+        if (p.type === "moving") {
+          const tt = now - p.spawnTime;
+          const offset = Math.sin(tt * (p.frequency ?? 0.8)) * (p.amplitude ?? 1.4);
+          if (p.axis === "x") px += offset;
+          else pz += offset;
+        }
+        const d = Math.hypot(px - lp.x, pz - lp.z);
+        if (d < bestD) {
+          bestD = d;
+          bestId = p.id;
+        }
+      }
+      if (bestId != null && bestD < 1.6) {
+        setPads((list) =>
+          list.map((p) => (p.id === bestId ? { ...p, launchAt: now } : p)),
+        );
+      }
+    }
 
     // ── 악어 이동 및 충돌 ──
     {
@@ -462,7 +639,7 @@ export default function LilyPadManager({ paused }: Props) {
         setCrocSnapAt({
           x: frog.current.x, z: frog.current.z,
           cx: crocRef.current.x, cz: crocRef.current.z,
-          bornAt: performance.now(),
+          bornAt: gameNowMs(),
         });
         shakeRef.current = 1.8;
         addPopup({
@@ -470,7 +647,7 @@ export default function LilyPadManager({ paused }: Props) {
           type: "Chomp",
           text: "CHOMP!",
           position: [frog.current.x, 2.2, frog.current.z],
-          bornAt: performance.now(),
+          bornAt: gameNowMs(),
           score: 0,
         });
         playCrocSnap();
@@ -487,7 +664,7 @@ export default function LilyPadManager({ paused }: Props) {
     // 날씨 타이머 — 단, 드래그(충전)로 점프를 조준 중일 땐 날씨 변경을 미룬다.
     // 이미 점프를 결정한 상태에서 바람 등이 바뀌면 불공평하게 작용하기 때문.
     weatherTimer.current += dt;
-    if (weatherTimer.current >= nextWeatherIn.current && !chargingRef.current) {
+    if (!DEBUG_FORCE_WEATHER && weatherTimer.current >= nextWeatherIn.current && !chargingRef.current) {
       const current = useGameStore.getState().weather;
       const next = pickWeather(current, Math.random);
       const wind =
@@ -520,7 +697,7 @@ export default function LilyPadManager({ paused }: Props) {
         const sx = frog.current.x;
         const sz = frog.current.z;
         frog.current.y = 0;
-        setSplashAt({ x: sx, z: sz, bornAt: performance.now() });
+        setSplashAt({ x: sx, z: sz, bornAt: gameNowMs() });
         playSplash();
         finishRun();
         jumpPlanRef.current = null;
@@ -561,38 +738,11 @@ export default function LilyPadManager({ paused }: Props) {
         if (Math.hypot(dx, dz) < p.radius) {
           // rotten 만료
           if (now - p.steppedAt >= LILY.ROTTEN_LIFETIME) {
-            const hasOtherSafeSupport = pads.some((other) => {
-              if (other.id === p.id || other.destroyed || other.type === "trap") return false;
-
-              let ox = other.position[0];
-              let oz = other.position[2];
-              if (other.type === "moving") {
-                const t = now - other.spawnTime;
-                const amp = other.amplitude ?? 1.4;
-                const freq = other.frequency ?? 0.8;
-                const offset = Math.sin(t * freq) * amp;
-                if (other.axis === "x") ox += offset;
-                else oz += offset;
-              }
-              if (Math.hypot(ox - fx, oz - fz) >= other.radius) return false;
-
-              if (
-                other.type === "blinking" &&
-                other.steppedAt == null &&
-                !swimStabilizedRef.current.has(other.id)
-              ) {
-                const cycle =
-                  ((now - other.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
-                if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
-              }
-              return true;
-            });
-            if (hasOtherSafeSupport) continue;
             handleFall(frog.current.x, frog.current.z, p.id);
             return;
           }
         }
-      }
+      }      
 
       // 5. 슬라이드 (기존)
       if (slideRef.current) {
@@ -678,12 +828,38 @@ export default function LilyPadManager({ paused }: Props) {
         return;
       }
 
-      // swim으로 복귀한 점멸 연잎은 안정화된 상태로 유지한다.
+      // swim으로 복귀한 점멸 연잎은 기존처럼 안정화 후 붕괴 처리
+      for (const { pad: p } of supportPads) {
+        if (p.type !== "blinking") continue;
+        if (!swimStabilizedRef.current.has(p.id)) continue;
+
+        if (p.steppedAt != null) {
+          const elapsed = now - p.steppedAt;
+
+          if (elapsed >= 1.0 + LILY.ROTTEN_LIFETIME) {
+            // 단, 이 점멸 연잎 말고 다른 안전 연잎도 같이 밟고 있으면 죽이지 않음
+            const otherSafe = supportPads.some(
+              ({ pad }) => pad.id !== p.id && isSupportSafe(pad),
+            );
+
+            if (!otherSafe) {
+              handleFall(frog.current.x, frog.current.z, p.id);
+              return;
+            }
+          } else if (elapsed >= 1.0 && p.swimShrinkAt == null) {
+            setPads((list) =>
+              list.map((pad) =>
+                pad.id === p.id ? { ...pad, swimShrinkAt: now } : pad,
+              ),
+            );
+          }
+        }
+      }
 
 
-
+  
     }
-
+    
     // 연잎/적/아이템 청소 및 보충
     cullAndSpawn();
 
@@ -704,7 +880,7 @@ export default function LilyPadManager({ paused }: Props) {
     setDistance(lx);
 
     // ★ 움직이는 연잎의 현재 시각 위치를 반영한 사본 만들기
-    const nowSec = performance.now() / 1000;
+    const nowSec = gameNow();
     const padsForCollision = pads.map((p) => {
       if (p.type !== "moving") return p;
       const t = nowSec - p.spawnTime;
@@ -754,24 +930,68 @@ export default function LilyPadManager({ paused }: Props) {
     }
     // 콤보 배율 적용 — NotBad는 콤보를 끊으므로 배율 혜택을 받지 않는다
     const combo = useGameStore.getState().combo;
-    const mult = j.type === "NotBad" ? 1 : comboMultiplier(combo);
+    // 콤보 프리징: NotBad로 콤보가 끊길 상황(콤보 1+)이면 1회 소모해 콤보 유지
+    const froze = j.type === "NotBad" && combo > 0 && consumeComboFreeze();
+    // 프리징으로 콤보를 지켜냈으면 NotBad라도 콤보 배율을 적용한다
+    const mult = j.type === "NotBad" && !froze ? 1 : comboMultiplier(combo);
     const raw = Math.round(j.baseScore * mult);
-    const gained = addScore(raw, j.type);
+    const gained = addScore(raw, j.type, froze);
     incrementPads();
+    lastLandAtRef.current = gameNow(); // 콤보 idle 타이머 갱신
 
-    // 착지 연잎에 파문 트리거
+    // 콤보 프리징 발동 — 콤보를 지켜낸 피드백 (얼음 반짝 팝업 + 사운드)
+    if (froze) {
+      addPopup({
+        id: ++popupIdRef.current,
+        type: "Great",
+        text: "콤보 유지!",
+        position: [pad.position[0], 2.2, pad.position[2]],
+        bornAt: gameNowMs(),
+        score: 0,
+      });
+      useGameStore.getState().triggerComboFreeze();
+      playComboFreeze();
+    }
+
+    // 콤보 등급 상승 감지 — 배율이 한 단계 오른 순간 축하 버스트 (등급 5단위)
+    const comboAfter = useGameStore.getState().combo;
+    if (comboMultiplier(comboAfter) > comboMultiplier(combo)) {
+      const tier = Math.floor(comboAfter / 5);
+      // 화면 전체 랭크업 연출 트리거 (HUD가 구독)
+      useGameStore.getState().triggerComboRankUp(tier, comboMultiplier(comboAfter));
+      playComboUp(tier);
+      // 등급 높을수록 약간 강한 카메라 펀치
+      shakeRef.current = Math.max(shakeRef.current, 0.2 + Math.min(0.25, tier * 0.03));
+    }
+
+    // 콤보 끊김 피드백 — 쌓인 콤보(3+)가 NotBad로 리셋되는 순간 회색 조각이 흩어져 떨어짐
+    // (프리징으로 콤보를 지켜냈으면 끊김 연출 생략)
+    if (j.type === "NotBad" && combo >= 3 && !froze) {
+      setComboBreakAt({
+        x: pad.position[0],
+        z: pad.position[2],
+        bornAt: gameNowMs(),
+      });
+      playComboBreak();
+      shakeRef.current = Math.max(shakeRef.current, 0.3);
+    }
+
+    // 착지 연잎에 파문 + 출렁 반동(발사 때와 동일한 launchAt) 트리거
+    const landAt = gameNow();
     setPads((list) =>
       list.map((p) =>
-        p.id === pad.id ? { ...p, rippleAt: performance.now() / 1000 } : p,
+        p.id === pad.id ? { ...p, rippleAt: landAt, launchAt: landAt } : p,
       ),
     );
+    // 개구리도 같은 타이밍으로 발판 출렁을 따라 까딱이도록
+    frog.current.padLaunchAt = landAt;
 
     addPopup({
       id: ++popupIdRef.current,
       type: j.type,
       text: `${judgmentText(j.type)}  +${gained}`,
       position: [pad.position[0] + 0.7, pad.position[1], pad.position[2]],
-      bornAt: performance.now(),
+      bornAt: gameNowMs(),
       score: gained,
     });
     playJudgment(j.type);
@@ -779,8 +999,8 @@ export default function LilyPadManager({ paused }: Props) {
     if (j.type === "Yarr") {
       shakeRef.current = 0.4;
       zoomRef.current = true;
-      zoomReleaseAt.current = performance.now() / 1000;
-      setYarrBurst({ x: pad.position[0], z: pad.position[2], bornAt: performance.now() });
+      zoomReleaseAt.current = gameNow();
+      setYarrBurst({ x: pad.position[0], z: pad.position[2], bornAt: gameNowMs() });
     } else {
       shakeRef.current = Math.max(shakeRef.current, 0.15);
     }
@@ -790,7 +1010,7 @@ export default function LilyPadManager({ paused }: Props) {
       setPads((list) =>
         list.map((p) =>
           p.id === pad.id
-            ? { ...p, steppedAt: performance.now() / 1000 }
+            ? { ...p, steppedAt: gameNow() }
             : p,
         ),
       );
@@ -801,7 +1021,7 @@ export default function LilyPadManager({ paused }: Props) {
       setPads((list) =>
         list.map((p) =>
           p.id === pad.id
-            ? { ...p, steppedAt: performance.now() / 1000 }
+            ? { ...p, steppedAt: gameNow() }
             : p,
         ),
       );
@@ -869,7 +1089,7 @@ export default function LilyPadManager({ paused }: Props) {
   function handleFall(x: number, z: number, excludePadId?: number) {
     // 생존 수영 버프 검사
     if (consumeSwimBuff()) {
-      const nowSec = performance.now() / 1000;
+      const nowSec = gameNow();
       const excludedPad = excludePadId != null ? pads.find((p) => p.id === excludePadId) : null;
       // swim 안정화된 점멸 연잎이 만료되는 경우는 재복귀 허용 안 함 (일반 exclude처럼 처리)
       const excludeIsBlinking =
@@ -884,7 +1104,6 @@ export default function LilyPadManager({ paused }: Props) {
       const usable = pads.filter((p) => {
         if (p.type === "trap" || p.type === "spring") return false;
         if (p.id === excludePadId && !excludeIsBlinking) return false;
-        if (p.type === "rotten" && p.steppedAt != null) return false;
         if (p.type === "blinking" && p.steppedAt == null && !swimStabilizedRef.current.has(p.id)) {
           const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
           if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
@@ -919,83 +1138,128 @@ export default function LilyPadManager({ paused }: Props) {
 
       const { pad } = nearestPad(x, z, finalCandidates);
       if (pad) {
-        frog.current.x = pad.position[0];
-        frog.current.z = pad.position[2];
-        frog.current.y = 0;
+        // 떨어진 지점에 물보라 → 개구리가 물 위를 헤엄쳐 연잎으로 복귀한다.
+        // (특수 연잎 효과·복귀 팝업은 도착 시점 arriveFromSwim에서 처리)
         slideRef.current = null;
-
-        // 이동 연잎이면 추적 재개 (복귀 위치 = 시각 위치이므로 offset = 0)
-        const origPad = pads.find((p) => p.id === pad.id);
-        if (origPad?.type === "moving") {
-          currentPadRef.current = { padId: pad.id, offsetX: 0, offsetZ: 0 };
-        } else {
-          currentPadRef.current = null;
-        }
-
-        // 특수 연잎 효과 적용 (landFrog 착지와 동일한 처리)
-        if (pad.type === "blinking") {
-          // 점멸 연잎: 즉시 안정화 (stale state 방지 ref도 업데이트)
-          swimStabilizedRef.current.add(pad.id);
-          setPads((list) =>
-            list.map((p) =>
-              p.id === pad.id ? { ...p, steppedAt: nowSec, swimShrinkAt: undefined } : p,
-            ),
-          );
-        } else if (pad.type === "rotten") {
-          // 삭은 연잎: steppedAt 설정해 타이머 시작 (1.2초 내 탈출 필요)
-          setPads((list) =>
-            list.map((p) => p.id === pad.id ? { ...p, steppedAt: nowSec } : p),
-          );
-        } else if (pad.type === "slippery") {
-          // 미끄러운 연잎: 모멘텀 없는 최소 슬라이드
-          const slideDist = pad.radius * 0.25;
-          const SLIDE_DURATION = 0.85;
-          const speed = (2.5 * slideDist) / SLIDE_DURATION;
-          slideRef.current = {
-            vx: Math.cos(aimDirRef.current) * speed,
-            vz: Math.sin(aimDirRef.current) * speed,
-            remaining: SLIDE_DURATION,
-            duration: SLIDE_DURATION,
-          };
-        } else if (pad.type === "rotating") {
-          // 회전 연잎: 다음 점프 방향 편향 적용
-          const dir = origPad?.rotationDirection ?? 1;
-          rotatingShiftRef.current = -dir * 0.1;
-        } else if (pad.type === "spring") {
-          // 스프링 연잎: 기본 거리로 즉시 점프 발사
-          playSpring();
-          const bigPlan = makeJumpPlan(
-            frog.current.x,
-            frog.current.z,
-            aimDirRef.current,
-            JUMP.MIN_DISTANCE * 1.5,
-            Math.max(arcHeightRef.current, 3.5),
-            useGameStore.getState().wind,
-          );
-          jumpPlanRef.current = bigPlan;
-          jumpTimeRef.current = 0;
-          currentPadRef.current = null;
-        }
-
-        addPopup({
-          id: ++popupIdRef.current,
-          type: "Great",
-          text: "수영 복귀!",
-          position: [frog.current.x, 1.5, frog.current.z],
-          bornAt: performance.now(),
-          score: 0,
-        });
+        jumpPlanRef.current = null;
+        currentPadRef.current = null;
+        frog.current.x = x;
+        frog.current.z = z;
+        frog.current.y = 0;
+        setSwimSplashAt({ x, z, bornAt: gameNowMs() });
+        playSplash();
+        const dist = Math.hypot(pad.position[0] - x, pad.position[2] - z);
+        swimGlideRef.current = {
+          fromX: x,
+          fromZ: z,
+          toX: pad.position[0],
+          toZ: pad.position[2],
+          padId: pad.id,
+          startedAt: gameNow(),
+          // 거리에 비례하되 0.35~0.7s로 클램프
+          duration: Math.min(0.7, Math.max(0.35, dist * 0.12)),
+          splashFired: false,
+        };
         return;
       }
     }
     frog.current.x = x;
     frog.current.z = z;
     frog.current.y = 0;
-    setSplashAt({ x, z, bornAt: performance.now() });
+    setSplashAt({ x, z, bornAt: gameNowMs() });
     playSplash();
     finishRun();
   }
 
+  /** 수영 헤엄 글라이드가 목표 연잎에 도착했을 때 — 안착 + 특수 연잎 효과 + 복귀 연출 */
+  function arriveFromSwim(padId: number, toX: number, toZ: number) {
+    const nowSec = gameNow();
+    lastLandAtRef.current = nowSec; // 콤보 idle 타이머 갱신 (수영 복귀도 착지)
+    const origPad = pads.find((p) => p.id === padId);
+    if (!origPad) {
+      // 도착 직전 연잎이 사라진 경우 — 안전망: 그 자리에서 낙사 처리
+      handleFall(toX, toZ);
+      return;
+    }
+
+    // 이동 연잎은 도착 시점의 실제 위치로 보정 (글라이드 중 드리프트)
+    let px = origPad.position[0];
+    let pz = origPad.position[2];
+    if (origPad.type === "moving") {
+      const t = nowSec - origPad.spawnTime;
+      const amp = origPad.amplitude ?? 1.4;
+      const freq = origPad.frequency ?? 0.8;
+      const offset = Math.sin(t * freq) * amp;
+      if (origPad.axis === "x") px += offset;
+      else pz += offset;
+    }
+
+    frog.current.x = px;
+    frog.current.z = pz;
+    frog.current.y = 0;
+    slideRef.current = null;
+
+    // 이동 연잎이면 추적 재개 (복귀 위치 = 시각 위치이므로 offset = 0)
+    if (origPad.type === "moving") {
+      currentPadRef.current = { padId, offsetX: 0, offsetZ: 0 };
+    } else {
+      currentPadRef.current = null;
+    }
+
+    // 특수 연잎 효과 적용 (landFrog 착지와 동일한 처리)
+    if (origPad.type === "blinking") {
+      // 점멸 연잎: 즉시 안정화 (stale state 방지 ref도 업데이트)
+      swimStabilizedRef.current.add(padId);
+      setPads((list) =>
+        list.map((p) => p.id === padId ? { ...p, steppedAt: nowSec } : p),
+      );
+    } else if (origPad.type === "rotten") {
+      // 삭은 연잎: steppedAt 설정해 타이머 시작 (1.2초 내 탈출 필요)
+      setPads((list) =>
+        list.map((p) => p.id === padId ? { ...p, steppedAt: nowSec } : p),
+      );
+    } else if (origPad.type === "slippery") {
+      // 미끄러운 연잎: 모멘텀 없는 최소 슬라이드
+      const slideDist = origPad.radius * 0.25;
+      const SLIDE_DURATION = 0.85;
+      const speed = (2.5 * slideDist) / SLIDE_DURATION;
+      slideRef.current = {
+        vx: Math.cos(aimDirRef.current) * speed,
+        vz: Math.sin(aimDirRef.current) * speed,
+        remaining: SLIDE_DURATION,
+        duration: SLIDE_DURATION,
+      };
+    } else if (origPad.type === "rotating") {
+      // 회전 연잎: 다음 점프 방향 편향 적용
+      const dir = origPad.rotationDirection ?? 1;
+      rotatingShiftRef.current = -dir * 0.1;
+    } else if (origPad.type === "spring") {
+      // 스프링 연잎: 기본 거리로 즉시 점프 발사
+      playSpring();
+      const bigPlan = makeJumpPlan(
+        frog.current.x,
+        frog.current.z,
+        aimDirRef.current,
+        JUMP.MIN_DISTANCE * 1.5,
+        Math.max(arcHeightRef.current, 3.5),
+        useGameStore.getState().wind,
+      );
+      jumpPlanRef.current = bigPlan;
+      jumpTimeRef.current = 0;
+      currentPadRef.current = null;
+    }
+
+    // 복귀 팝업 (솟아오르는 물보라는 글라이드에서 도착 직전 미리 터뜨림)
+    addPopup({
+      id: ++popupIdRef.current,
+      type: "Great",
+      text: "수영 복귀!",
+      position: [frog.current.x, 1.5, frog.current.z],
+      bornAt: gameNowMs(),
+      score: 0,
+    });
+  }
+ 
 
   /** 개구리 진행에 따라 뒤쪽 연잎/적/아이템 정리하고 앞쪽에 새로 생성 */
   function cullAndSpawn() {
@@ -1054,7 +1318,7 @@ export default function LilyPadManager({ paused }: Props) {
             type = specials[Math.floor(Math.random() * specials.length)];
           }
         }
-
+        
         const padSizeFactor = type === "basic"
           ? sizeFactor                                  // 일반: 기본 공식
           : Math.max(0.9, 1.2 - score / 1400);          // 특수: 완만한 공식
@@ -1065,8 +1329,8 @@ export default function LilyPadManager({ paused }: Props) {
           id: ++padIdRef.current,
           type,
           position: [maxX, WORLD.PAD_TOP_Y, lat],
-          radius: LILY.RADIUS * padSizeFactor,
-          spawnTime: performance.now() / 1000,
+          radius: LILY.RADIUS * padSizeFactor, 
+          spawnTime: gameNow(),
           visualRotation: (Math.random() - 0.5) * 0.7,
           visualScale: 0.88 + Math.random() * 0.28,
           ...(type === "moving"
@@ -1085,7 +1349,7 @@ export default function LilyPadManager({ paused }: Props) {
         kept.push(newPad);
         lastZ = lat;
 
-
+        
         const branchChance = Math.max(0.25, 0.55 - score / 1500);
         const branchCount = Math.random() < branchChance ? (Math.random() < 0.4 ? 2 : 1) : 0;
         //                                                                       
@@ -1101,45 +1365,53 @@ export default function LilyPadManager({ paused }: Props) {
           if (Math.random() < dangerChance) {
             branchType = Math.random() < 0.5 ? "spring" : "trap";  // 5:5
           }
-
+          
           kept.push({
             id: ++padIdRef.current,
             type: branchType,
             position: [bx, WORLD.PAD_TOP_Y, bz],
             radius: LILY.RADIUS * sizeFactor * (0.7 + Math.random() * 0.3),
-            spawnTime: performance.now() / 1000,
+            spawnTime: gameNow(),
             visualRotation: (Math.random() - 0.5) * 0.7,
             visualScale: 0.75 + Math.random() * 0.3,
           });
         }
 
         // 적 스폰
-        if (Math.random() < (DEBUG_ALWAYS_SPAWN_ENEMY ? 1 : enemyProb(diff))) {
+        const enemySpawnProb =
+          DEBUG_ALWAYS_SPAWN_ENEMY || DEBUG_FORCE_ENEMY_TYPE ? 1 : enemyProb(diff);
+        if (Math.random() < enemySpawnProb) {
           const roll = DEBUG_ALWAYS_SPAWN_ENEMY ? Math.random() * 0.75 : Math.random();
+          const type: EnemyData["type"] =
+            DEBUG_FORCE_ENEMY_TYPE ??
+            (roll < 0.4 ? "fish" : roll < 0.75 ? "bird" : "obstacle");
           const enemy: EnemyData = {
             id: ++enemyIdRef.current,
-            type: roll < 0.4 ? "fish" : roll < 0.75 ? "bird" : "obstacle",
+            type,
             position: [
               maxX - gap * 0.5,
-              roll < 0.4 ? -0.3 : roll < 0.75 ? 3.2 : 0.6,
+              type === "fish" ? -0.3 : type === "bird" ? ENEMY.BIRD_SPAWN_Y : 0.6,
               lat * 0.4 + (Math.random() - 0.5) * 1.4,
             ],
-            spawnTime: performance.now() / 1000,
+            spawnTime: gameNow(),
             amplitude: 1 + Math.random(),
             active: true,
           };
           setEnemies((es) => [...es, enemy]);
         }
-        // 아이템 스폰
-        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 0.13 : 0.13; // 
+        // 아이템 스폰 — 디버그로 타입을 강제하면 매 연잎마다 항상 스폰 (물고기 디버그와 동일)
+        const itemChance = DEBUG_FORCE_ITEM_TYPE ? 1 : 0.13;
         if (Math.random() < itemChance) {
+          const r = Math.random();
           const t: ItemData["type"] =
             DEBUG_FORCE_ITEM_TYPE ??
-            (Math.random() < 0.55
+            (r < 0.45
               ? "rangeUp"
-              : Math.random() < 0.7
+              : r < 0.65
                 ? "swim"
-                : "scoreBoost");
+                : r < 0.83
+                  ? "scoreBoost"
+                  : "comboFreeze");
           const item: ItemData = {
             id: ++itemIdRef.current,
             type: t,
@@ -1161,7 +1433,7 @@ export default function LilyPadManager({ paused }: Props) {
         (i) =>
           i.position[0] > fx - LILY.CULL_BEHIND &&
           // 잡힌 파리는 입으로 빨려 들어가는 연출(≈320ms)이 끝난 뒤 제거
-          (!i.collected || performance.now() - (i.collectedAt ?? 0) < 400),
+          (!i.collected || gameNowMs() - (i.collectedAt ?? 0) < 400),
       ),
     );
   }
@@ -1217,26 +1489,36 @@ export default function LilyPadManager({ paused }: Props) {
             : 0
         }
         isDead={splashAt !== null}
+        isSwimming={swimGlideRef.current !== null}
+        swimDir={
+          swimGlideRef.current
+            ? Math.atan2(
+                swimGlideRef.current.toZ - swimGlideRef.current.fromZ,
+                swimGlideRef.current.toX - swimGlideRef.current.fromX,
+              )
+            : 0
+        }
         crocSnap={crocSnapAt ? { cx: crocSnapAt.cx, cz: crocSnapAt.cz, bornAt: crocSnapAt.bornAt } : null}
       />
       {pads.map((p) => (
         <LilyPad
           key={p.id}
           pad={p}
-          now={performance.now() / 1000}
+          now={gameNow()}
           isCandidate={p.id === candidatePadId}
           crocRef={crocRef}
         />
       ))}
-      <EnemyManager enemies={enemies} now={performance.now() / 1000} />
+      <EnemyManager enemies={enemies} now={gameNow()} />
       <CrocEnemy
         x={crocRef.current.x}
         z={crocRef.current.z}
-        now={performance.now() / 1000}
+        now={gameNow()}
         dist={Math.hypot(frog.current.x - crocRef.current.x, frog.current.z - crocRef.current.z)}
         caught={!!crocSnapAt}
+        paused={trulyPaused}
       />
-      <ItemManager items={items} now={performance.now() / 1000} frogRef={frog} />
+      <ItemManager items={items} now={gameNow()} frogRef={frog} />
       <EffectsManager
         frogX={frog.current.x}
         frogZ={frog.current.z}
@@ -1245,12 +1527,12 @@ export default function LilyPadManager({ paused }: Props) {
         arcHeight={arcHeightRef.current}
         isCharging={chargingRef.current}
         isJumping={!!jumpPlanRef.current}
-        isSwimming={false}
+        isSwimming={swimGlideRef.current !== null}
         yarrBurst={yarrBurst}
         splashAt={splashAt}
-        swimSplashAt={null}
-        launchAt={null}
-        comboBreakAt={null}
+        swimSplashAt={swimSplashAt}
+        launchAt={launchAt}
+        comboBreakAt={comboBreakAt}
         crocSnapAt={crocSnapAt}
       />
     </>
