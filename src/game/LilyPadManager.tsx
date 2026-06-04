@@ -36,13 +36,13 @@ import type {
 import { playComboBreak, playComboFreeze, playComboUp, playCrocSnap, playCrocWarnIfNeeded, playJudgment, playSplash, playSlurp, playSpring, playWhoosh } from "./sound";
 import { gameNow, gameNowMs } from "./gameClock";
 // 🧪 디버그: 특정 연잎만 스폰 (테스트 끝나면 null로)
-const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = null;
+const DEBUG_FORCE_PAD_TYPE: LilyPadData["type"] | null = "rotten";
 
 interface Props {
   paused: boolean;
 }
 // 🧪 디버그: 특정 파리(아이템)만 스폰 + 초반부터 항상 등장 (예: "swim" → 오라/수영 테스트). 끝나면 null로
-const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = null;
+const DEBUG_FORCE_ITEM_TYPE: ItemData["type"] | null = "swim";
 // 🧪 디버그: 적(새/물고기) 항상 스폰, obstacle 제외 (테스트 끝나면 false로)
 const DEBUG_ALWAYS_SPAWN_ENEMY = false;
 // 🧪 디버그: 특정 적만 스폰 + 초반부터 항상 등장 ("fish"/"bird"/"obstacle"). 끝나면 null로
@@ -828,33 +828,7 @@ export default function LilyPadManager({ paused }: Props) {
         return;
       }
 
-      // swim으로 복귀한 점멸 연잎은 기존처럼 안정화 후 붕괴 처리
-      for (const { pad: p } of supportPads) {
-        if (p.type !== "blinking") continue;
-        if (!swimStabilizedRef.current.has(p.id)) continue;
-
-        if (p.steppedAt != null) {
-          const elapsed = now - p.steppedAt;
-
-          if (elapsed >= 1.0 + LILY.ROTTEN_LIFETIME) {
-            // 단, 이 점멸 연잎 말고 다른 안전 연잎도 같이 밟고 있으면 죽이지 않음
-            const otherSafe = supportPads.some(
-              ({ pad }) => pad.id !== p.id && isSupportSafe(pad),
-            );
-
-            if (!otherSafe) {
-              handleFall(frog.current.x, frog.current.z, p.id);
-              return;
-            }
-          } else if (elapsed >= 1.0 && p.swimShrinkAt == null) {
-            setPads((list) =>
-              list.map((pad) =>
-                pad.id === p.id ? { ...pad, swimShrinkAt: now } : pad,
-              ),
-            );
-          }
-        }
-      }
+      // 생존수영으로 복귀한 점멸 연잎은 안정화 상태로 유지한다.
 
 
   
@@ -1104,6 +1078,7 @@ export default function LilyPadManager({ paused }: Props) {
       const usable = pads.filter((p) => {
         if (p.type === "trap" || p.type === "spring") return false;
         if (p.id === excludePadId && !excludeIsBlinking) return false;
+        if (p.type === "rotten" && p.steppedAt != null) return false;
         if (p.type === "blinking" && p.steppedAt == null && !swimStabilizedRef.current.has(p.id)) {
           const cycle = ((nowSec - p.spawnTime) % LILY.BLINK_PERIOD) / LILY.BLINK_PERIOD;
           if (cycle >= LILY.BLINK_VISIBLE_RATIO) return false;
@@ -1211,7 +1186,9 @@ export default function LilyPadManager({ paused }: Props) {
       // 점멸 연잎: 즉시 안정화 (stale state 방지 ref도 업데이트)
       swimStabilizedRef.current.add(padId);
       setPads((list) =>
-        list.map((p) => p.id === padId ? { ...p, steppedAt: nowSec } : p),
+        list.map((p) =>
+          p.id === padId ? { ...p, steppedAt: nowSec, swimShrinkAt: undefined } : p,
+        ),
       );
     } else if (origPad.type === "rotten") {
       // 삭은 연잎: steppedAt 설정해 타이머 시작 (1.2초 내 탈출 필요)
