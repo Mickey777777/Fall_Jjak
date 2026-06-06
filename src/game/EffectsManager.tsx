@@ -196,8 +196,8 @@ function PopupText({
     <sprite
       position={[popup.position[0], popup.position[1] + y, popup.position[2]]}
       scale={[
-        (2.4 + popup.text.length * 0.08) * popScale,
-        0.62 * popScale,
+        (2.8 + popup.text.length * 0.08) * popScale,
+        0.72 * popScale,
         1,
       ]}
     >
@@ -222,7 +222,7 @@ function createPopupTexture(text: string, color: string) {
     const cy = canvas.height / 2;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.font = '900 44px "Galmuri11", "Press Start 2P", "DungGeunMo", sans-serif';
+    ctx.font = '900 52px "Galmuri11", "Press Start 2P", "DungGeunMo", sans-serif';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
 

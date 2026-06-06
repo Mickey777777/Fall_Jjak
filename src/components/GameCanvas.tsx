@@ -36,6 +36,15 @@ export default function GameCanvas({ paused }: Props) {
     return () => window.removeEventListener("keydown", onKey);
   }, [phase, setPhase]);
 
+  // 탭 전환 / 백그라운드 시 자동 일시정지
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden && phase === "playing") setPhase("paused");
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [phase, setPhase]);
+
   return (
     <div className="canvas-wrap">
       <Canvas
