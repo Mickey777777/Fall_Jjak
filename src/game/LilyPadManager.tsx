@@ -119,6 +119,8 @@ export default function LilyPadManager({ paused }: Props) {
   const crocRef = useRef({ x: -ENEMY.CROC_BASE_DISTANCE, z: 0 });
   // 직전 프레임의 경고 상태 — store 업데이트를 변화 시점에만 호출하기 위해
   const crocDangerRef = useRef(-1); // 마지막으로 store에 쓴 양자화 위험도 (재렌더 최소화)
+  // 첫 점프 발사 전까지 악어 정지
+  const crocStartedRef = useRef(false);
 
   const slideRef = useRef<{
     vx: number;
@@ -241,6 +243,7 @@ export default function LilyPadManager({ paused }: Props) {
       chargingRef.current = false;
       setCharging(false);
       if (jumpPlanRef.current) return;
+      crocStartedRef.current = true;
       // 충전 시점에 이미 rangeUp 최댓값이 반영된 거리가 들어있음 — 추가 보정 불필요
       const dist = chargeDistanceRef.current;
       // 회전 연잎 어긋남 적용 (보이지 않게)
@@ -613,9 +616,11 @@ export default function LilyPadManager({ paused }: Props) {
     {
       const crocDiff = Math.min(1, useGameStore.getState().score / ENEMY.CROC_SPEED_MAX_SCORE);
       const crocSpeed = ENEMY.CROC_SPEED + (ENEMY.CROC_SPEED_MAX - ENEMY.CROC_SPEED) * crocDiff; // 1.0 → 2.6 m/s (점수 0→3000)
-      crocRef.current.x += crocSpeed * dt;
-      // Z 방향으로 개구리를 느리게 추적 (프레임독립적 lerp)
-      crocRef.current.z += (frog.current.z - crocRef.current.z) * (1 - Math.exp(-1.2 * dt));
+      if (crocStartedRef.current) {
+        crocRef.current.x += crocSpeed * dt;
+        // Z 방향으로 개구리를 느리게 추적 (프레임독립적 lerp)
+        crocRef.current.z += (frog.current.z - crocRef.current.z) * (1 - Math.exp(-1.2 * dt));
+      }
 
       const cdx = frog.current.x - crocRef.current.x;
       const cdz = frog.current.z - crocRef.current.z;
@@ -662,7 +667,8 @@ export default function LilyPadManager({ paused }: Props) {
 
     // 날씨 타이머 — 단, 드래그(충전)로 점프를 조준 중일 땐 날씨 변경을 미룬다.
     // 이미 점프를 결정한 상태에서 바람 등이 바뀌면 불공평하게 작용하기 때문.
-    weatherTimer.current += dt;
+    // 첫 점프 발사 전에는 타이머를 진행하지 않는다.
+    if (crocStartedRef.current) weatherTimer.current += dt;
     if (!DEBUG_FORCE_WEATHER && weatherTimer.current >= nextWeatherIn.current && !chargingRef.current) {
       const current = useGameStore.getState().weather;
       const next = pickWeather(current, Math.random);
