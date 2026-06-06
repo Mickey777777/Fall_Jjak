@@ -16,7 +16,6 @@ import { useGameStore } from "../store/useGameStore";
 import { ENEMY, JUMP, LILY, WORLD, SCORE as SCORECONST } from "./constants";
 import {
   difficultyOf,
-  enemyProb,
   gapForDifficulty,
   lateralForDifficulty,
   pickPadType,
@@ -1284,9 +1283,9 @@ export default function LilyPadManager({ paused }: Props) {
         kept.length > 0 ? kept[kept.length - 1].position[2] : 0;
       let zigSign: 1 | -1 = lastZ < 0 ? 1 : -1;
       while (maxX < fx + LILY.SPAWN_AHEAD * (LILY.MAX_GAP + 4)) {
-        // 점수가 높아질수록 간격이 최대 1.6배까지 늘어남
-        const sparsity = Math.min(1.4, 1 + score / 2000);
-        const sizeFactor = Math.max(0.77, 1.2 - score / 1200);
+        // 점수가 높아질수록 간격이 최대 1.4배까지 늘어남 (1300점에서 최대치)
+        const sparsity = Math.min(1.4, 1 + score / 3250);
+        const sizeFactor = Math.max(0.77, 1.2 - (score / 1000) * 0.43);
         const gap = gapForDifficulty(diff, Math.random) * sparsity;
         // 지그재그 — 다음 패드는 이전과 반대 쪽으로 향함 (가끔 직진)
         const straight = Math.random() < 0.25;
@@ -1311,7 +1310,7 @@ export default function LilyPadManager({ paused }: Props) {
         }
         // 점수가 높아질수록 basic을 특수 연잎으로 바꿈 (trap 제외)
         if (type === "basic" && !DEBUG_FORCE_PAD_TYPE) {
-          const specialChance = Math.min(0.6, 0.1 + score / 1500);
+          const specialChance = Math.min(0.6, 0.1 + (score / 1000) * 0.5);
           if (Math.random() < specialChance) {
             const specials: LilyPadData["type"][] = [
               "rotten",
@@ -1326,7 +1325,7 @@ export default function LilyPadManager({ paused }: Props) {
         
         const padSizeFactor = type === "basic"
           ? sizeFactor                                  // 일반: 기본 공식
-          : Math.max(0.9, 1.2 - score / 1400);          // 특수: 완만한 공식
+          : Math.max(0.9, 1.2 - (score / 800) * 0.3);   // 특수: 완만한 공식
 
 
         maxX += gap;
@@ -1355,7 +1354,7 @@ export default function LilyPadManager({ paused }: Props) {
         lastZ = lat;
 
         
-        const branchChance = Math.max(0.25, 0.55 - score / 1500);
+        const branchChance = Math.max(0.25, 0.55 - (score / 700) * 0.3);
         const branchCount = Math.random() < branchChance ? (Math.random() < 0.4 ? 2 : 1) : 0;
         //                                                                       
         //                                                                 
@@ -1383,8 +1382,11 @@ export default function LilyPadManager({ paused }: Props) {
         }
 
         // 적 스폰
+        const enemyScoreDiff = Math.min(1, score / 1500);
         const enemySpawnProb =
-          DEBUG_ALWAYS_SPAWN_ENEMY || DEBUG_FORCE_ENEMY_TYPE ? 1 : enemyProb(diff);
+          DEBUG_ALWAYS_SPAWN_ENEMY || DEBUG_FORCE_ENEMY_TYPE
+            ? 1
+            : 0.05 + enemyScoreDiff * enemyScoreDiff * 0.2;
         if (Math.random() < enemySpawnProb) {
           const roll = DEBUG_ALWAYS_SPAWN_ENEMY ? Math.random() * 0.75 : Math.random();
           const type: EnemyData["type"] =
