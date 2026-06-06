@@ -61,7 +61,10 @@ interface GameState {
   buffs: ActiveBuff[];
   // 옵션
   muted: boolean;
-  showTutorial: boolean;
+  // 튜토리얼 UI 브리지 (Canvas의 TutorialManager → DOM의 TutorialOverlay)
+  tutorialStep: number; // 현재 스텝 인덱스 (완료 시 스텝 수와 같아짐)
+  tutorialCombo: number; // 표시 전용 콤보 카운터
+  tutorialHint: string | null; // 실패 시 힌트
   // ──────────── 액션 ────────────
   setPhase: (p: GamePhase) => void;
   resetRun: () => void;
@@ -85,7 +88,9 @@ interface GameState {
   incrementFlies: () => void;
   incrementPads: () => void;
   toggleMute: () => void;
-  setShowTutorial: (b: boolean) => void;
+  setTutorialStep: (n: number) => void;
+  setTutorialCombo: (n: number) => void;
+  setTutorialHint: (h: string | null) => void;
   /** 악어 근접 위험도 0~1 (WARN_DIST=0 → KILL_DIST=1). 0이면 경고 숨김 */
   crocDanger: number;
   setCrocDanger: (v: number) => void;
@@ -142,7 +147,9 @@ export const useGameStore = create<GameState>((set, get) => ({
   runId: 0,
   highScore: loadHighScore(),
   muted: loadMuted(),
-  showTutorial: true,
+  tutorialStep: 0,
+  tutorialCombo: 0,
+  tutorialHint: null,
   ...initialRunState,
 
   setPhase: (p) => set({ phase: p }),
@@ -241,7 +248,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set({ muted: next });
   },
-  setShowTutorial: (b) => set({ showTutorial: b }),
+  setTutorialStep: (n) => set({ tutorialStep: n }),
+  setTutorialCombo: (n) => set({ tutorialCombo: n }),
+  setTutorialHint: (h) => set({ tutorialHint: h }),
   setCrocDanger: (v) => set({ crocDanger: v }),
   setComboIdleWarn: (v) => set({ comboIdleWarn: v }),
   setLightningFlash: (v) => set({ lightningFlash: v }),

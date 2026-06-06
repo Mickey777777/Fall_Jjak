@@ -1,6 +1,12 @@
 import type { Vector3Tuple } from "three";
 
-export type GamePhase = "menu" | "control" | "playing" | "paused" | "gameover";
+export type GamePhase =
+  | "menu"
+  | "control"
+  | "tutorial"
+  | "playing"
+  | "paused"
+  | "gameover";
 
 export type JudgmentType = "Yarr" | "Great" | "NotBad" | "Miss" | "Chomp";
 
