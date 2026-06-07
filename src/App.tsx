@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGameStore } from "./store/useGameStore";
 import { syncBgm, restartBgm, fadeOutBgm } from "./game/bgm";
-import { playClick } from "./game/sound";
+import { playClick, playHover } from "./game/sound";
 import GameCanvas from "./components/GameCanvas";
 import HUD from "./components/HUD";
 import MainMenu from "./components/MainMenu";
@@ -45,13 +45,25 @@ export default function App() {
     restartBgm();
   }, [runId]);
 
-  // 모든 UI 버튼 클릭에 효과음. 캡처 단계로 위임해 버튼마다 따로 붙이지 않는다.
+  // 모든 UI 버튼의 클릭/호버에 효과음. 캡처 단계로 위임해 버튼마다 따로 붙이지 않는다.
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest("button")) playClick();
     };
+    const onOver = (e: MouseEvent) => {
+      const btn = (e.target as HTMLElement).closest("button");
+      if (!btn) return;
+      // mouseover는 버튼 내부 자식으로 이동할 때도 발생 — 버튼 바깥에서 들어온 경우만 1회.
+      const from = e.relatedTarget as Node | null;
+      if (from && btn.contains(from)) return;
+      playHover();
+    };
     window.addEventListener("click", onClick, true);
-    return () => window.removeEventListener("click", onClick, true);
+    window.addEventListener("mouseover", onOver, true);
+    return () => {
+      window.removeEventListener("click", onClick, true);
+      window.removeEventListener("mouseover", onOver, true);
+    };
   }, []);
 
   useEffect(() => {
