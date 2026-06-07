@@ -46,11 +46,16 @@ export function syncBgm() {
   const { muted, phase } = useGameStore.getState();
   const a = getAudio();
   if (!a) return;
-  cancelFade(a);
-  if (muted || !PLAY_PHASES.includes(phase)) {
-    a.pause();
+  const shouldPlay = !muted && PLAY_PHASES.includes(phase);
+  if (shouldPlay) {
+    // 이미 재생 중이면 아무것도 하지 않는다(입력마다 호출돼도 play() 반복 없음).
+    if (a.paused) {
+      cancelFade(a);
+      a.play().catch(() => {});
+    }
   } else {
-    a.play().catch(() => {});
+    cancelFade(a);
+    a.pause();
   }
 }
 
