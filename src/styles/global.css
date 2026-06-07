@@ -585,7 +585,7 @@ button.ghost {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .overlay, .card, .logo { animation: none; }
+  .overlay, .card, .logo, .help-backdrop, .help-card { animation: none; }
 }
 
 .logo {
@@ -644,6 +644,7 @@ button.ghost {
   justify-content: center;
   padding: 20px;
   background: rgba(20, 28, 30, 0.28);
+  animation: overlayFade 0.32s ease both;
 }
 .help-card {
   width: min(560px, 92vw);
@@ -654,6 +655,7 @@ button.ghost {
   background: var(--card-strong);
   box-shadow: 0 24px 42px rgba(0, 0, 0, 0.28);
   padding: 22px;
+  animation: cardRise 0.42s cubic-bezier(0.16, 1.2, 0.4, 1) both;
 }
 .help-head {
   display: flex;
