@@ -1,6 +1,7 @@
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useEffect } from "react";
 import LilyPadManager from "../game/LilyPadManager";
+import TutorialManager from "../game/TutorialManager";
 import { useGameStore } from "../store/useGameStore";
 import { COLORS, WORLD } from "../game/constants";
 import { pauseClock, resumeClock } from "../game/gameClock";
@@ -73,7 +74,11 @@ export default function GameCanvas({ paused }: Props) {
           />
           <hemisphereLight args={[COLORS.SKY_TOP, "#9bc94a", 0.25]} />
 
-          <LilyPadManager key={runId} paused={paused} />
+          {phase === "tutorial" ? (
+            <TutorialManager />
+          ) : (
+            <LilyPadManager key={runId} paused={paused} />
+          )}
         </Suspense>
       </Canvas>
     </div>

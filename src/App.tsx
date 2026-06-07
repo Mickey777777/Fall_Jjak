@@ -6,6 +6,7 @@ import MainMenu from "./components/MainMenu";
 import PauseMenu from "./components/PauseMenu";
 import GameOverScreen from "./components/GameOverScreen";
 import ControlOverlay from "./components/ControlOverlay";
+import TutorialOverlay from "./components/TutorialOverlay";
 
 const GAMEOVER_DELAY_MS = 1000;
 
@@ -34,6 +35,7 @@ export default function App() {
 
       {phase === "menu" && <MainMenu />}
       {phase === "control" && <ControlOverlay />}
+      {phase === "tutorial" && <TutorialOverlay />}
       {phase === "paused" && <PauseMenu />}
       {showGameOver && <GameOverScreen />}
     </div>

@@ -9,6 +9,7 @@ import {
   EyeOff,
   Fish,
   Gauge,
+  GraduationCap,
   HelpCircle,
   MoveHorizontal,
   RotateCw,
@@ -189,8 +190,20 @@ const JUDGMENT_HELP: HelpItem[] = [
 
 export default function MainMenu() {
   const setPhase = useGameStore((s) => s.setPhase);
+  const resetRun = useGameStore((s) => s.resetRun);
+  const setTutorialStep = useGameStore((s) => s.setTutorialStep);
+  const setTutorialCombo = useGameStore((s) => s.setTutorialCombo);
+  const setTutorialHint = useGameStore((s) => s.setTutorialHint);
   const highScore = useGameStore((s) => s.highScore);
   const [helpOpen, setHelpOpen] = useState(false);
+
+  const startTutorial = () => {
+    resetRun();
+    setTutorialStep(0);
+    setTutorialCombo(0);
+    setTutorialHint(null);
+    setPhase("tutorial");
+  };
 
   return (
     <div className="overlay menu">
@@ -202,6 +215,10 @@ export default function MainMenu() {
       <div className="card">
         <button className="primary" onClick={() => setPhase("playing")}>
           시작하기
+        </button>
+        <button className="ghost tutorial-button" onClick={startTutorial}>
+          <GraduationCap aria-hidden="true" />
+          튜토리얼
         </button>
         <div className="menu-actions">
           <button className="ghost" onClick={() => setPhase("control")}>
