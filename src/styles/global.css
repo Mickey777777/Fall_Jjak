@@ -1096,13 +1096,23 @@ button.ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  background: rgba(20, 28, 30, 0.4);
-  color: #fff;
+  border: 0;
+  background: rgba(255, 255, 255, 0.85);
+  color: #1e2a2a;
   cursor: pointer;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.15);
+  transition: background 0.15s, transform 0.1s;
+}
+.tutorial-exit:hover {
+  background: #fff;
+}
+.tutorial-exit:active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.15);
 }
 .tutorial-exit svg {
   width: 20px;
@@ -1134,6 +1144,7 @@ button.ghost {
   font-weight: 700;
   line-height: 1.5;
   color: var(--ink);
+  white-space: pre-line;
 }
 .tutorial-instruction.done {
   font-size: 22px;
