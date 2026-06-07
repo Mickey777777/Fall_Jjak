@@ -122,6 +122,66 @@ export function playSpring() {
   setTimeout(() => blip(720, "square", 0.1, 0.16), 60);
 }
 
+/** UI 버튼 클릭 — 필터된 노이즈로 만든 짧은 "틱"(톤 멜로디와 음색이 겹치지 않게) */
+export function playClick() {
+  if (isMuted()) return;
+  const c = getCtx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const t0 = c.currentTime;
+
+  const dur = 0.028;
+  const sr = c.sampleRate;
+  const frames = Math.ceil(sr * dur);
+  const buf = c.createBuffer(1, frames, sr);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < frames; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const bpf = c.createBiquadFilter();
+  bpf.type = "bandpass";
+  bpf.frequency.value = 2400;
+  bpf.Q.value = 0.9;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.16, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(bpf);
+  bpf.connect(g);
+  g.connect(c.destination);
+  src.start(t0);
+  src.stop(t0 + dur + 0.01);
+}
+
+/** UI 버튼 호버 — 클릭보다 더 작고 높은 미묘한 "사락" */
+export function playHover() {
+  if (isMuted()) return;
+  const c = getCtx();
+  if (!c) return;
+  if (c.state === "suspended") c.resume().catch(() => {});
+  const t0 = c.currentTime;
+
+  const dur = 0.018;
+  const sr = c.sampleRate;
+  const frames = Math.ceil(sr * dur);
+  const buf = c.createBuffer(1, frames, sr);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < frames; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / frames);
+  const src = c.createBufferSource();
+  src.buffer = buf;
+  const bpf = c.createBiquadFilter();
+  bpf.type = "bandpass";
+  bpf.frequency.value = 3400;
+  bpf.Q.value = 1.1;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.05, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(bpf);
+  bpf.connect(g);
+  g.connect(c.destination);
+  src.start(t0);
+  src.stop(t0 + dur + 0.01);
+}
+
 /** 점프 발사 — 짧게 솟구치는 "휙" (상승 피치 스윕 + 가벼운 바람 노이즈) */
 export function playWhoosh() {
   if (isMuted()) return;
